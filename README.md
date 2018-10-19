@@ -1,1 +1,1 @@
-# dominionline
+Trying to implement a server game thing in Haskell. Let's see if this works.
