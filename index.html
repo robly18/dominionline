@@ -2,6 +2,18 @@
 <head>
 
 <script>
+function writeAction(str) {
+	return JSON.stringify([playerno, {tag:"Write", contents:str}]);
+}
+
+function pollAction() {
+	return JSON.stringify([playerno, {tag:"Poll"}]);
+}
+
+function startAction() {
+	return JSON.stringify([playerno, {tag:"Start"}]);
+}
+
 function ajax(url, data, callback) {
   var xhttp;
   xhttp=new XMLHttpRequest();
@@ -14,16 +26,44 @@ function ajax(url, data, callback) {
   xhttp.send(data);
 }
 
-function writeToLog(data) {
-	let stuff = JSON.parse(data.responseText);
-	let lines = stuff.story;
-	let log = document.getElementById("log");
-	log.innerHTML = "";
-	for (let line of lines) {
-		let node = document.createTextNode(line);
-		log.appendChild(node);
-		log.appendChild(document.createElement("br"));
+function render(data) {
+	document.getElementById("join").style.display = "none";
+	document.getElementById("start").style.display = "none";
+	document.getElementById("send").style.display = "none";
+	document.getElementById("box").style.display = "none";
+	let state = JSON.parse(data.responseText);
+	if (state.tag == "State") {
+		document.getElementById("send").style.display = "block";
+		document.getElementById("box").style.display = "block";
+		let lines = state.story;
+		let log = document.getElementById("log");
+		log.innerHTML = lines.join(" ");
+		let plrctr = document.getElementById("playerctr");
+		let playing = state.playing;
+		if (playerno == null) playerctr.innerHTML = "You are a spectator.";
+		else playerctr.innerHTML = "You are player " + (playerno+1) + " out of " + state.playerno +".";
+		if (playing == playerno) {
+			plrctr.innerHTML += " It's your turn!"
+		} else {
+			plrctr.innerHTML += " It is player " + (playing+1) + "'s turn."
+		}
+	} else {
+		let log = document.getElementById("log");
+		if (playerno != null) {
+			log.innerHTML = "You are player " + (playerno+1) + " out of " + state.playerno;
+			document.getElementById("start").style.display = "block";
+		} else {
+			log.innerHTML = "There are currently " + state.playerno + " players signed up. Care to join?";
+			document.getElementById("join").style.display = "block";
+		}
 	}
+}
+
+let playerno = null;
+
+function getPlayer(data) {
+	let stuff = JSON.parse(data.responseText);
+	playerno = stuff[0]
 }
 </script>
 </head>
@@ -32,14 +72,33 @@ function writeToLog(data) {
 
 <p id="log">No messages yet.</p>
 
-<input type="text" id="box">Type something!</input>
+<input type="text" id="box">
+
+<p id=playerctr></p>
 
 <br>
 
 <button type="button"
-onclick="ajax('/send/', document.getElementById('box').value, writeToLog)">Bluh
+id="send"
+onclick="ajax('/send/', writeAction(document.getElementById('box').value), render)">Send
 </button>
 
-<script>window.setInterval(function(){ajax('/send/', "", writeToLog)}, 1000)</script>
+<br>
+
+<button type="button"
+id="join"
+onclick="ajax('/join/', '', getPlayer)">Join
+</button>
+
+<br>
+
+<button type="button"
+id="start"
+onclick="ajax('/send/', startAction(), render)">Start
+</button>
+
+<script>
+ajax('/send/', pollAction(), render);
+window.setInterval(function(){ajax('/send/', pollAction(), render)}, 1000)</script>
 </body>
 </html>

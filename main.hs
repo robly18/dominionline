@@ -14,11 +14,21 @@ app game request respond = case rawPathInfo request of
   "/"      -> respond index
   "/send/" -> do state <- readIORef game
                  body <- requestBody request
-                 let bodys = B8.unpack body
-                 let action = if bodys == "" then Start else (Write bodys)
-                 let newstate = act state (0, action)
+                 putStrLn ("Got request with body " ++ B8.unpack body)
+                 case decode $ LB8.fromStrict body of
+                    Nothing -> respond $ send $ encode state
+                    Just (plr, action) -> do
+                                    let newstate = act state (plr, action)
+                                    writeIORef game newstate
+                                    respond $ send $ encode newstate
+  "/join/" -> do putStrLn "Joining"
+                 state <- readIORef game
+                 --body <- requestBody request
+                 --let bodys = B8.unpack body
+                 --let action = if bodys == "" then Start else (Write bodys)
+                 let (plr, newstate) = joinGame state
                  writeIORef game newstate
-                 respond $ send $ encode newstate
+                 respond $ send $ encode (plr, newstate)
   _        -> respond notFound
 
 
