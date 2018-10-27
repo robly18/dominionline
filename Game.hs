@@ -1,10 +1,14 @@
 {-# LANGUAGE DeriveGeneric #-}
-module Game (newGame, act, State, encode, decode, joinGame,
-            Action (Write, Start, Poll)) where
+--module Game (newGame, act, State, encode, decode, joinGame,
+--            Action (Write, Start, Poll)) where
 
-import Data.Array
+import Prelude hiding (log)
+
+import Data.Sequence
 import Data.Maybe
-import Data.Aeson
+import Data.Aeson (ToJSON, FromJSON)
+
+import Control.Monad
 
 import GHC.Generics
 
@@ -19,48 +23,53 @@ data Action = Request Int | Start | Poll
 instance ToJSON Action
 instance FromJSON Action
 
-data State = State {playerno :: Int, playing :: Int, decks :: [Deck], points :: [Int], table :: Deck, log :: [String]}
-           | StartState {playerno :: Int}
+type PlayerState = (Deck, [Int]) --Hand, Points made
+
+data Table = Table {players :: Seq PlayerState, playing :: Int, pool :: Deck}
+    deriving (Generic, Show)
+instance ToJSON Table
+instance FromJSON Table
+
+data Log a = Log [String] a
+    deriving (Generic, Show)
+instance (ToJSON a) => ToJSON (Log a)
+instance (FromJSON a) => FromJSON (Log a)
+instance Functor Log where
+    fmap f (Log l x) = Log l (f x)
+instance Applicative Log where
+    pure x = Log [] x
+    (Log l1 f) <*> (Log l2 x) = Log (l1 ++ l2) (f x)
+instance Monad Log where
+    (Log l1 x) >>= f = let Log l2 y = f x in Log (l1 ++ l2) y
+log :: String -> Log ()
+log s = Log [s] ()
+
+data State = State Table
+           | StartState Int
     deriving (Generic, Show)
 
-data ShowState = ShowState {playerno :: Int, playing :: Int, decks :: [Int], points :: [Int] Table :: Int, mydeck :: Deck, log :: [String]}
-               | StartSState {playerno :: Int}
-    deriving (Generic, Show)
-
-instance ToJSON ShowState
-instance FromJSON ShowState
+instance ToJSON State
+instance FromJSON State
 
 newGame :: State
 newGame = StartState 0
 
-joinGame :: State -> (Maybe Int, State)
-joinGame s@(State _ _ _) = (Nothing, s)
-joinGame (StartState plrno) = (Just plrno, StartState (plrno+1))
+joinGame :: State -> Log (Maybe Int, State)
+joinGame (StartState plrno) = do log $ "Player "++show plrno++" joins the game!"
+                                 return (Just plrno, StartState (plrno+1))
+joinGame s = return (Nothing, s)
 
-act :: State -> (Int, Action) -> State
-act st (_, Poll) = st
-act st (plr, Request card) = request plr card st
-act s@(State _ _ _) (_, _) = s
+
+act :: State -> (Int, Action) -> Log State
+act st (_, Poll) = return st
+act (State t) (plr, Request card) = (fmap State) $ request plr card t
 act s@(StartState plrno) (plr, action) = case action of
-    Start -> State plrno plr []
-    _     -> s
+    Start -> (log $ "Player "++show plr++" has started the game." ) >> (return $ State $ newTable plrno)
+    _     -> return s
+act s (_, _) = return s
 
-request :: Int -> Int -> State -> State
-request plr card s@(State plrno playing decks points table log) = let whohas = findIndices (elem card) decks in
-    if playing `elem` whohas then
-        let others = delete playing whohas in
-        if others == [] then goFish plr card s
-        else give card plr s
-    else
-        s
-request _ _ s = s
+request :: Int -> Int -> Table -> Log Table
+request _ _ _ = undefined
 
-goFish :: Int -> Int -> State -> State
-goFish plr card s@(State plrno playing decks points table log) = case table of
-    []      -> nextPlr $ State plrno playing decks points table (log++["Player "++show plr++" asked for "++show card++", but there were none."])
-    (nc:nt) -> if nc == card then
-                State plrno playing (addTo nc playing decks) --argh. todo
-
-
-nextPlr :: State -> State
-nextPlr (State plrno playing decks points table log) =  State plrno ((playing+1)`mod`plrno) decks points table log
+newTable :: Int -> Table
+newTable _ = undefined
