@@ -117,7 +117,7 @@ goFish plr req t =   do let tpool = view pool t
                                     return fished
                                else
                                  do log $ "Tough luck. It wasn't the card they wanted."
-                                    nextPlr t
+                                    nextPlr fished
                                     
 
 newTable :: Int -> RL Table
