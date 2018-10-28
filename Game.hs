@@ -24,7 +24,7 @@ type Deck = [Int]
 deck :: Int -> Deck --argument is number of cards of each suit. there are 4 suits.
 deck n = [i | i <- [1..n], j <- [1..4]]
 
-data Action = Request Int | Start | Poll
+data Action = Request Int | Start | Poll | Pass
     deriving (Generic, Show)
 
 instance ToJSON Action
@@ -74,7 +74,8 @@ joinGame s = return (Nothing, s)
 
 act :: State -> (Int, Action) -> RL State
 act st (_, Poll) = return st
-act (State t) (plr, Request card) = lift $ (fmap State) $ request plr card t
+act (State t) (plr, Request card) = lift $ (fmap State) $ request plr card t --todo check if it's your turn!!
+act (State t) (plr, Pass) = lift $ (fmap State) $ nextPlr t
 act s@(StartState plrno) (plr, action) = case action of
     Start -> do lift $ log $ "Player "++show plr++" has started the game."
                 nt <- newTable plrno
