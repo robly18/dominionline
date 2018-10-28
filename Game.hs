@@ -110,7 +110,7 @@ goFish plr req t =   do let tpool = view pool t
                           (x:xs) ->
                             do log "Go fish!"
                                let fished = set pool xs $
-                                            over players (S.adjust (over _2 $ (x:)) plr) $
+                                            over players (S.adjust (over _1 $ (x:)) plr) $
                                             t
                                if x == req then
                                  do log $"They got a "++show req++"! It's their turn again"
