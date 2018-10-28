@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Game (newGame, act, State, encode, decode, joinGame,
-            Action (Request, Start, Poll)) where
+            Action (Request, Start, Poll), RL, Log, forget) where
 
 import Prelude hiding (log)
 
@@ -51,6 +51,8 @@ instance Monad Log where
     (Log l1 x) >>= f = let Log l2 y = f x in Log (l1 ++ l2) y
 log :: String -> Log ()
 log s = Log [s] ()
+forget :: Log a -> a
+forget (Log _ x) = x
 
 type RL = RandT StdGen Log
 
@@ -65,8 +67,8 @@ newGame :: State
 newGame = StartState 0
 
 joinGame :: State -> Log (Maybe Int, State)
-joinGame (StartState plrno) = do log $ "Player "++show plrno++" joins the game!"
-                                 return (Just plrno, StartState (plrno+1))
+joinGame (StartState plrno) = (log $ "Player "++show plrno++" joins the game!") >>
+                                return (Just plrno, StartState (plrno+1))
 joinGame s = return (Nothing, s)
 
 
