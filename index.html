@@ -2,8 +2,12 @@
 <head>
 
 <script>
-function writeAction(str) {
-	return JSON.stringify([playerno, {tag:"Write", contents:str}]);
+function requestAction(c) {
+	return JSON.stringify([playerno, {tag:"Request", contents:c}]);
+}
+
+function passAction() {
+	return JSON.stringify([playerno, {tag:"Pass"}]);
 }
 
 function pollAction() {
@@ -27,43 +31,14 @@ function ajax(url, data, callback) {
 }
 
 function render(data) {
-	document.getElementById("join").style.display = "none";
-	document.getElementById("start").style.display = "none";
-	document.getElementById("send").style.display = "none";
-	document.getElementById("box").style.display = "none";
-	let state = JSON.parse(data.responseText);
-	if (state.tag == "State") {
-		document.getElementById("send").style.display = "block";
-		document.getElementById("box").style.display = "block";
-		let lines = state.story;
-		let log = document.getElementById("log");
-		log.innerHTML = lines.join(" ");
-		let plrctr = document.getElementById("playerctr");
-		let playing = state.playing;
-		if (playerno == null) playerctr.innerHTML = "You are a spectator.";
-		else playerctr.innerHTML = "You are player " + (playerno+1) + " out of " + state.playerno +".";
-		if (playing == playerno) {
-			plrctr.innerHTML += " It's your turn!"
-		} else {
-			plrctr.innerHTML += " It is player " + (playing+1) + "'s turn."
-		}
-	} else {
-		let log = document.getElementById("log");
-		if (playerno != null) {
-			log.innerHTML = "You are player " + (playerno+1) + " out of " + state.playerno;
-			document.getElementById("start").style.display = "block";
-		} else {
-			log.innerHTML = "There are currently " + state.playerno + " players signed up. Care to join?";
-			document.getElementById("join").style.display = "block";
-		}
-	}
+	//let state = JSON.parse(data.responseText);
+	console.log(data.responseText);
 }
 
 let playerno = null;
 
 function getPlayer(data) {
-	let stuff = JSON.parse(data.responseText);
-	playerno = stuff[0]
+	playerno = JSON.parse(data.responseText);
 }
 </script>
 </head>
@@ -80,7 +55,7 @@ function getPlayer(data) {
 
 <button type="button"
 id="send"
-onclick="ajax('/send/', writeAction(document.getElementById('box').value), render)">Send
+onclick="ajax('/send/', requestAction(parseInt(document.getElementById('box').value)), render)">Send
 </button>
 
 <br>
@@ -99,6 +74,6 @@ onclick="ajax('/send/', startAction(), render)">Start
 
 <script>
 ajax('/send/', pollAction(), render);
-window.setInterval(function(){ajax('/send/', pollAction(), render)}, 1000)</script>
+window.setInterval(function(){ajax('/send/', pollAction(), render)}, 3000)</script>
 </body>
 </html>
