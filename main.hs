@@ -18,7 +18,7 @@ app game request respond = case rawPathInfo request of
                  body <- requestBody request
                  putStrLn ("Got request with body " ++ B8.unpack body)
                  case decode $ LB8.fromStrict body of
-                    Nothing -> respond $ send $ encode state
+                    Nothing -> (putStrLn "Could not parse request.")>>(respond $ send $ encode state)
                     Just (plr, action) -> do
                                     let newstate = lift state >>= (flip act (plr, action)) --RandT Log State
                                     let ran = runRandT newstate gen -- Log (State, StdGen)
@@ -30,7 +30,7 @@ app game request respond = case rawPathInfo request of
                  let psp = do s <- state
                               joinGame s
                  writeIORef game $ (fmap snd psp, gen)
-                 respond $ send $ encode psp
+                 respond $ send $ encode $ fst $ forget psp
   _        -> respond notFound
 
 
