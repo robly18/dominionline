@@ -44,25 +44,32 @@ function render(data) {
 
 function renderLog(log) {
 	let logdiv = document.getElementById("log");
-	while (logdiv.childNodes.length != 0) logdiv.removeChild(logdiv.childNodes[0]);
+
+	let isScrolledToBottom = logdiv.scrollHeight - logdiv.clientHeight <= logdiv.scrollTop + 1;
+	//in the event i add a scrollbar later.
+
+	clearNode(logdiv);
 	for (let msg of log) {
 		let t = document.createTextNode(msg);
 		logdiv.appendChild(t);
 		logdiv.appendChild(document.createElement("br"));
 	}
+
+	if(isScrolledToBottom)
+		logdiv.scrollTop = logdiv.scrollHeight - logdiv.clientHeight;
 }
 
 function renderStartState(state) {
-	renderPlayerDisplay(null);
+	renderPlayerDisplay(null, state._players.length);
 }
 
 function renderState(state) {
-	renderPlayerDisplay(state._playing);
-	let disp = document.getElementById("playerdisplay");
+	renderPlayerDisplay(state._playing, state._players.length);
+	let disp = document.getElementById("cards");
+	clearNode(disp);
 	function askFunction(card) {
 		return function(){ajax('/send/', requestAction(card), render)}
 	}
-	console.log(state, state._players, state._players[0], playerno, state._players[playerno]);
 	for (let card of state._players[playerno][0]) {
 		let c = document.createElement("input");
 		c.type = "button";
@@ -78,12 +85,12 @@ function getPlayer(data) {
 	playerno = JSON.parse(data.responseText);
 }
 
-function renderPlayerDisplay(playing) {
+function renderPlayerDisplay(playing, playernumber) {
 	let pd = document.getElementById("playerdisplay");
 	if (playerno != null) {
-		pd.innerHTML = "You are player " + playerno + ".";
+		pd.innerHTML = "You are player " + playerno + " out of " + playernumber + ".";
 	} else {
-		pd.innerHTML = "You are a spectator."
+		pd.innerHTML = "You are a spectator. There are " + playernumber + " people playing."
 	}
 	if (playing != null) {
 		if (playing == playerno)
@@ -95,6 +102,9 @@ function renderPlayerDisplay(playing) {
 
 function hide(name) {document.getElementById(name).style.display = "none"}
 function show(name) {document.getElementById(name).style.display = "block"}
+function clearNode(n) {
+	while (n.childNodes.length != 0) n.removeChild(n.childNodes[0]);
+}
 </script>
 </head>
 <body>
@@ -122,7 +132,7 @@ onclick="ajax('/send/', startAction(), render)">Start
 
 <div
 id="log"
-style="height:10em; border-style:solid; overflow:scroll;"
+style="height:15em; border-style:solid; overflow:hidden;"
 >
 </div>
 
