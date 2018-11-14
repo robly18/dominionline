@@ -84,7 +84,8 @@ act s@(StartState plrno) (plr, action) = case action of
 act s (_, _) = return s
 
 request :: Int -> Int -> Table -> Log Table
-request plr card t@(Table tplayers _ _) =
+request plr card t@(Table tplayers playing _) =
+    if plr == playing then
      do let playersWhoHave = S.findIndicesL (elem card . fst) tplayers
         if plr `elem` playersWhoHave then
              do log $ "Player "++show plr++" requested "++show card++"."
@@ -92,10 +93,11 @@ request plr card t@(Table tplayers _ _) =
                 if others == [] then (log "But nobody has it...") >> goFish plr card t
                 else do log $ show playersWhoHave --placeholder
                         let collected = [ c | (p,_) <- toList tplayers, c <- p, c == card]
-                        let withoutCollected = over players (fmap $ over _2 $ filter (/= card)) t
+                        let withoutCollected = over players (fmap $ over _1 $ filter (/= card)) t
                         log $ "They collected "++show (length collected)++" cards!"
-                        return $ over players (S.adjust (over _2 $ (collected++)) plr) t
+                        return $ over players (S.adjust (over _1 $ (collected++)) plr) withoutCollected
         else return t
+    else return t
         
 
 nextPlr :: Table -> Log Table
