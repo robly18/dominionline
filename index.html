@@ -2,13 +2,10 @@
 <head>
 
 <script>
-function requestAction(c) {
-	return JSON.stringify([playerno, {tag:"Request", contents:c}]);
+function sayAction(c) {
+	return JSON.stringify([playerno, {tag:"Say", contents:c}]);
 }
 
-function passAction() {
-	return JSON.stringify([playerno, {tag:"Pass"}]);
-}
 
 function pollAction() {
 	return JSON.stringify([playerno, {tag:"Poll"}]);
@@ -35,10 +32,6 @@ function render(data) {
 	let log = logstate[0];
 	let state = logstate[1];
 	renderLog(log);
-	if (state.tag == "StartState")
-		renderStartState(state.contents);
-	else
-		renderState(state.contents);
 	console.log(data.responseText);
 }
 
@@ -59,25 +52,6 @@ function renderLog(log) {
 		logdiv.scrollTop = logdiv.scrollHeight - logdiv.clientHeight;
 }
 
-function renderStartState(state) {
-	renderPlayerDisplay(null, state._players.length);
-}
-
-function renderState(state) {
-	renderPlayerDisplay(state._playing, state._players.length);
-	let disp = document.getElementById("cards");
-	clearNode(disp);
-	function askFunction(card) {
-		return function(){ajax('/send/', requestAction(card), render)}
-	}
-	for (let card of state._players[playerno][0]) {
-		let c = document.createElement("input");
-		c.type = "button";
-		c.onclick = askFunction(card);
-		c.value = card;
-		disp.appendChild(c);
-	}
-}
 
 let playerno = null;
 
@@ -85,38 +59,25 @@ function getPlayer(data) {
 	playerno = JSON.parse(data.responseText);
 }
 
-function renderPlayerDisplay(playing, playernumber) {
-	let pd = document.getElementById("playerdisplay");
-	if (playerno != null) {
-		pd.innerHTML = "You are player " + playerno + " out of " + playernumber + ".";
-	} else {
-		pd.innerHTML = "You are a spectator. There are " + playernumber + " people playing."
-	}
-	if (playing != null) {
-		if (playing == playerno)
-			pd.innerHTML += " It is your turn!"
-		else
-			pd.innerHTML += " It is player " + playing + "'s turn."
-	}
-}
 
 function hide(name) {document.getElementById(name).style.display = "none"}
 function show(name) {document.getElementById(name).style.display = "block"}
 function clearNode(n) {
 	while (n.childNodes.length != 0) n.removeChild(n.childNodes[0]);
 }
+
+function sendText() {
+    let txtbox = document.getElementById("text");
+    let txt = txtbox.value;
+    txtbox.value = "";
+    return ajax('/send/', sayAction(txt), render);
+}
 </script>
 </head>
 <body>
 <h1>Hello world.</h1>
 
-<div id=playerdisplay></div>
-
 <br>
-
-<div id=cards> </div>
-
-<div id=otherinfo> </div>
 
 <button type="button"
 id="join"
@@ -126,17 +87,21 @@ onclick="ajax('/join/', '', getPlayer)">Join
 <br>
 
 <button type="button"
-id="start"
-onclick="ajax('/send/', startAction(), render)">Start
+id="send"
+onclick="sendText()">Send
 </button>
+
+<input type="text" id="text"> </input>
 
 <div
 id="log"
-style="height:15em; border-style:solid; overflow:hidden;"
+style="height:15em; border-style:solid; overflow:scroll;"
 >
 </div>
 
 <script>
+document.getElementById("text").onkeypress = function(k){if (k.keyCode==13) sendText();};
+
 ajax('/send/', pollAction(), render);
 window.setInterval(function(){ajax('/send/', pollAction(), render)}, 1000)</script>
 </body>
