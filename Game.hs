@@ -37,7 +37,13 @@ forget (Log _ x) = x
 
 type RL = RandT StdGen Log
 
-data State = State Int
+type Card = Int
+
+type Player = (Int, [Card], [Card], [Card], [Card])
+                -- plrno, hand, deck, discarded, played
+
+data State = JoiningState [Player]
+           | GameState [Player] Int
     deriving (Generic, Show)
 
 newGame :: State
