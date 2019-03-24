@@ -37,33 +37,67 @@ forget (Log _ x) = x
 
 type RL = RandT StdGen Log
 
-type Card = Int
+data Card = Copper | Victory
+    deriving (Generic, Show)
+instance ToJSON Card
+instance FromJSON Card
 
-type Player = (Int, [Card], [Card], [Card], [Card])
-                -- plrno, hand, deck, discarded, played
+data Player = Player { _playerno :: Int,
+                       _hand :: [Card],
+                       _deck :: [Card],
+                       _discarded :: [Card],
+                       _played :: [Card],
+                       _money :: Int }
+    deriving (Generic, Show)
+instance ToJSON Player
+instance FromJSON Player
 
 data State = JoiningState [Player]
-           | GameState [Player] Int
+           | GameState Int [Player] [Card]
     deriving (Generic, Show)
 
 newGame :: State
-newGame = State 0
+newGame = JoiningState []
 
 instance ToJSON State
 instance FromJSON State
 
-data Action = Poll | Say String
+data Action = Poll
+            | Say String
+            | Play Int --play the nth card in one's hand
+            | EndTurn
     deriving (Generic, Show)
 instance ToJSON Action
 instance FromJSON Action
 
 act :: State -> (Int, Action) -> RL State
-act s (plr, a) = case a of
-                    Poll -> return s
-                    Say x -> do lift $ log $ show plr ++ ": " ++ x
-                                return s
+act s (_  , Poll) = return s
+act s (plr, Say x) = do lift $ log $ show plr ++ ": " ++ x
+                        return s
+act s (plr, EndTurn) = case s of
+                        JoiningState _ -> return s
+                        GameState _ _ _ -> nextPlayer s
+act s (plr, Play i) = case s of
+                        JoiningState _ -> return s
+                        GameState _ _ _ -> playCard s plr i
+
+nextPlayer (GameState p plrs stack) = do lift $ log $ "Player " ++ show p ++ " ends their turn."
+                                         let p2 = (p+1) `mod` (length plrs)
+                                         lift $ log $ "It's player " ++ show p2 ++"'s turn."
+                                         return $ GameState p2 plrs stack --todo: send played to discarded!!
+
+playCard :: State -> Int -> Int -> RL State
+playCard s@(GameState p plrs stack) plr i = return s
+{- To do:
+    extract card 'i' from plrs[i].hand
+    move it to plrs[i].played
+    act accordingly-}
 
 joinGame :: State -> Log (Maybe Int, State)
-joinGame (State s) = do log $ "Player " ++ show s ++ " joins."
-                        return (Just s, State $ s+1)
+joinGame (JoiningState plrs) = do let plrno = length plrs
+                                  log $ "Player " ++ show plrno ++ " joins."
+                                  return (Just plrno, JoiningState $ plrs ++ [newPlayer $ plrno])
+
+newPlayer :: Int -> Player
+newPlayer i = Player i [] [] [] [] 0
 
