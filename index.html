@@ -46,8 +46,8 @@ function render(data) {
 	let log = logstate[0];
 	let state = logstate[1];
 	renderLog(log);
-	document.getElementById("state").innerHTML = data.responseText;
-	console.log(data.responseText);
+	document.getElementById("state").innerHTML = JSON.stringify(state);
+	console.log(state);
 }
 
 function renderLog(log) {

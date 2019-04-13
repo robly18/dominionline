@@ -98,12 +98,15 @@ playCard s@(GameState p plrs stack) plr i = --todo sanity checks before using !!
     let newplayer = player {hand = newhand, played = card : played player} in
     let newplrs = (take plr plrs) ++ [newplayer] ++ (drop (plr+1) plrs) in
     --act on the card i guess
-    return $ s {players = newplrs}
-    
-{- To do:
-    extract card 'i' from plrs[i].hand
-    move it to plrs[i].played
-    act accordingly-}
+    lift (log $ "Player " ++ show plr ++ " played " ++ show card)
+    >> (actOnCard (s {players = newplrs}) plr card)
+
+actOnCard :: State -> Int -> Card -> RL State
+actOnCard s plr Copper = let plrs = players s in
+                         let newplayer = (\p -> p {money = money p + 1}) $ players s !! plr in
+                         let newplrs = (take plr plrs) ++ [newplayer] ++ (drop (plr+1) plrs) in
+                         return $ s {players = newplrs}
+actOnCard s _ _ = return s
 
 joinGame :: State -> Log (Maybe Int, State)
 joinGame (JoiningState plrs) = do let plrno = length plrs
