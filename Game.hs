@@ -15,6 +15,8 @@ import Control.Monad
 import Control.Monad.Random.Lazy (lift, RandT, StdGen)
 import System.Random.Shuffle
 
+import Control.Lens
+
 import GHC.Generics
 
 data Log a = Log [String] a
@@ -49,6 +51,27 @@ data Player = Player { playerno :: Int,
     deriving (Generic, Show)
 instance ToJSON Player
 instance FromJSON Player
+
+draw :: Player -> RL Player
+draw p = case deck p of
+            (c:cs) -> (lift $ log $ "Drawing one") >> return p {hand = c : hand p, deck = cs}
+            [] -> case discarded p of
+                    [] -> (lift $ log $ "Ran out of cards") >> return p
+                    _ -> (lift $ log $ "Shuffling discarded") >> (shuffleDiscarded p) >>= draw
+
+shuffleDiscarded :: Player -> RL Player
+shuffleDiscarded p = do newdeck <- shuffleM (discarded p ++ deck p)
+                        return $ p {discarded = [], deck = newdeck}
+
+discardDraw :: Player -> RL Player
+discardDraw p = do lift $ log $ "discard drawing"
+                   let pp = p {hand = [], played = [], discarded = hand p ++ played p ++ discarded p}
+                   p1 <- draw pp
+                   p2 <- draw p1
+                   p3 <- draw p2
+                   p4 <- draw p3
+                   p5 <- draw p4
+                   return p5 --i don't like this
 
 data State = JoiningState [Player]
            | GameState {playing :: Int,
@@ -87,8 +110,10 @@ act s (plr, Play i) = case s of
 
 nextPlayer (GameState p plrs stack) = do lift $ log $ "Player " ++ show p ++ " ends their turn."
                                          let p2 = (p+1) `mod` (length plrs)
-                                         lift $ log $ "It's player " ++ show p2 ++"'s turn."
-                                         return $ GameState p2 plrs stack --todo: send played to discarded!!
+                                         lift $ log $ "It's player " ++ show p2 ++ "'s turn."
+                                         newplrp <- discardDraw $ plrs !! p
+                                         let newplrs = set (element p) newplrp plrs
+                                         return $ GameState p2 newplrs stack --todo: send played to discarded!!
 
 playCard :: State -> Int -> Int -> RL State --assuming p == plr
 playCard s@(GameState p plrs stack) plr i = --todo sanity checks before using !!
