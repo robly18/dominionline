@@ -2,17 +2,27 @@
 <head>
 
 <script>
+function makeAction(a) {
+	return JSON.stringify([playerno, a]);
+}
+function startAction() {
+	return {tag:"StartGame"};
+}
 function sayAction(c) {
-	return JSON.stringify([playerno, {tag:"Say", contents:c}]);
+	return {tag:"Say", contents:c};
 }
 
 
 function pollAction() {
-	return JSON.stringify([playerno, {tag:"Poll"}]);
+	return {tag:"Poll"};
 }
 
-function startAction() {
-	return JSON.stringify([playerno, {tag:"Start"}]);
+
+function playCardAction(c) {
+	return {tag:"Play", contents:c};
+}
+function nextPlayerAction() {
+	return {tag:"EndTurn"};
 }
 
 function ajax(url, data, callback) {
@@ -27,12 +37,17 @@ function ajax(url, data, callback) {
   xhttp.send(data);
 }
 
+function sendAction(a) {
+    return ajax('/send/', makeAction(a), render);
+}
+
 function render(data) {
 	let logstate = JSON.parse(data.responseText);
 	let log = logstate[0];
 	let state = logstate[1];
 	renderLog(log);
-	console.log(data.responseText);
+	document.getElementById("state").innerHTML = JSON.stringify(state);
+	console.log(state);
 }
 
 function renderLog(log) {
@@ -66,11 +81,23 @@ function clearNode(n) {
 	while (n.childNodes.length != 0) n.removeChild(n.childNodes[0]);
 }
 
-function sendText() {
+function getTextboxData() {
     let txtbox = document.getElementById("text");
     let txt = txtbox.value;
     txtbox.value = "";
-    return ajax('/send/', sayAction(txt), render);
+    return txt;
+}
+
+function sendText() {
+    return sendAction(sayAction(getTextboxData()));
+}
+
+function playCard() {
+    return sendAction(playCardAction(parseInt(getTextboxData(), 10)));
+}
+
+function nextPlayer() {
+    return sendAction(nextPlayerAction());
 }
 </script>
 </head>
@@ -83,6 +110,10 @@ function sendText() {
 id="join"
 onclick="ajax('/join/', '', getPlayer)">Join
 </button>
+<button type="button"
+id="start"
+onclick="sendAction(startAction())">Start
+</button>
 
 <br>
 
@@ -91,18 +122,30 @@ id="send"
 onclick="sendText()">Send
 </button>
 
+<button type="button"
+onclick="playCard()">Play
+</button>
+
+<button type="button"
+onclick="nextPlayer()">End turn
+</button>
+
 <input type="text" id="text"> </input>
 
 <div
 id="log"
-style="height:15em; border-style:solid; overflow:scroll;"
+style="height:15em; border-style:solid; overflow-y:scroll;"
 >
 </div>
+
+<div id="state"
+style="height:5em; border-style:solid; overflow:auto;"
+>
 
 <script>
 document.getElementById("text").onkeypress = function(k){if (k.keyCode==13) sendText();};
 
 ajax('/send/', pollAction(), render);
-window.setInterval(function(){ajax('/send/', pollAction(), render)}, 1000)</script>
+window.setInterval(function(){sendAction(pollAction())}, 1000)</script>
 </body>
 </html>
