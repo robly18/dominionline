@@ -53,7 +53,7 @@ instance ToJSON Player
 instance FromJSON Player
 
 data State = JoiningState [Player]
-           | GameState Int [Player] [Card]
+           | GameState Int [Player] [Card] -- playerturn, player list, cards on the table
     deriving (Generic, Show)
 
 newGame :: State
@@ -87,7 +87,13 @@ nextPlayer (GameState p plrs stack) = do lift $ log $ "Player " ++ show p ++ " e
                                          return $ GameState p2 plrs stack --todo: send played to discarded!!
 
 playCard :: State -> Int -> Int -> RL State
-playCard s@(GameState p plrs stack) plr i = return s
+playCard s@(GameState p plrs stack) plr i = return s --todo: use State Monad
+{-
+	player_in_question = plrs[plr]
+	card_played = player_in_question.hand.pop(i)
+	player_in_question.played.push(card_played)
+	//something  to do w card_played
+-}
 {- To do:
     extract card 'i' from plrs[i].hand
     move it to plrs[i].played
