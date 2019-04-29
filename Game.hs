@@ -87,6 +87,7 @@ data Action = Poll
             | Say String
             | Play Int --play the nth card in one's hand
             | EndTurn
+            | Buy
     deriving (Generic, Show)
 instance ToJSON Action
 instance FromJSON Action
@@ -104,6 +105,9 @@ act s (plr, EndTurn) = case s of
 act s (plr, Play i) = case s of
                         JoiningState _ -> return s
                         GameState plr2 _ _ -> if plr == plr2 then playCard s i else return s
+act s (plr, Buy) = case s of
+                        JoiningState _ -> return s
+                        GameState plr2 _ _ -> if plr == plr2 then buyCard s else return s
 
 nextPlayer (GameState p plrs stack) = do lift $ log $ "Player " ++ show p ++ " ends their turn."
                                          let p2 = (p+1) `mod` (length plrs)
@@ -115,7 +119,10 @@ nextPlayer (GameState p plrs stack) = do lift $ log $ "Player " ++ show p ++ " e
 getPlayer :: Int -> [Player] -> Player
 getPlayer i plrs = plrs !! i
 
-playCard :: State -> Int -> RL State --assuming p == plr
+getCurrentPlayer :: State -> Player
+getCurrentPlayer s = players s !! playing s
+
+playCard :: State -> Int -> RL State
 playCard s@(GameState p plrs stack) i = --todo sanity checks before using !!
     let player = getPlayer p plrs
         itshand = hand player
@@ -134,10 +141,23 @@ actOnCard s plr Copper = let plrs = players s in
                          return $ s {players = newplrs}
 actOnCard s _ _ = return s
 
+buyCard :: State -> RL State
+buyCard s = do  lift $ log $ "Player " ++ show (playing s) ++ " buys a card."
+                let plr = getCurrentPlayer s
+                let pn = playing s
+                let plrs = players s
+                if money plr >= 1 then do
+                    let newplr = plr { money = money plr - 1, played = played plr ++ [head $ table s] }
+                    let newplrs = (take pn plrs) ++ [newplr] ++ (drop (pn+1) plrs)
+                    return s {players = newplrs, table = tail $ table s }
+                else do
+                    return s
+
 joinGame :: State -> Log (Maybe Int, State)
 joinGame (JoiningState plrs) = do let plrno = length plrs
                                   log $ "Player " ++ show plrno ++ " joins."
                                   return (Just plrno, JoiningState $ plrs ++ [newPlayer $ plrno])
+joinGame s = return (Nothing, s)
 
 newPlayer :: Int -> Player
 newPlayer i = Player i [Copper, Victory, Copper, Copper] [] [] [] 0

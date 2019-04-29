@@ -24,6 +24,9 @@ function playCardAction(c) {
 function nextPlayerAction() {
 	return {tag:"EndTurn"};
 }
+function buyCardAction() {
+    return {tag:"Buy"};
+}
 
 function ajax(url, data, callback) {
   var xhttp;
@@ -92,6 +95,10 @@ function sendText() {
     return sendAction(sayAction(getTextboxData()));
 }
 
+function buyCard() {
+    return sendAction(buyCardAction());
+}
+
 function playCard() {
     return sendAction(playCardAction(parseInt(getTextboxData(), 10)));
 }
@@ -120,6 +127,10 @@ onclick="sendAction(startAction())">Start
 <button type="button"
 id="send"
 onclick="sendText()">Send
+</button>
+
+<button type="button"
+onclick="buyCard()">Buy
 </button>
 
 <button type="button"
