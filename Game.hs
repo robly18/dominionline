@@ -103,7 +103,7 @@ act s (plr, EndTurn) = case s of
                         GameState plr2 _ _ -> if plr == plr2 then nextPlayer s else return s
 act s (plr, Play i) = case s of
                         JoiningState _ -> return s
-                        GameState plr2 _ _ -> if plr == plr2 then playCard s plr i else return s
+                        GameState plr2 _ _ -> if plr == plr2 then playCard s i else return s
 
 nextPlayer (GameState p plrs stack) = do lift $ log $ "Player " ++ show p ++ " ends their turn."
                                          let p2 = (p+1) `mod` (length plrs)
@@ -121,10 +121,10 @@ playCard s@(GameState p plrs stack) i = --todo sanity checks before using !!
         itshand = hand player
         (newhand, card) = ((take i itshand) ++ (drop (i+1) itshand), itshand !! i)
         newplayer = player {hand = newhand, played = card : played player}
-        newplrs = (take plr plrs) ++ [newplayer] ++ (drop (plr+1) plrs) in
+        newplrs = (take p plrs) ++ [newplayer] ++ (drop (p+1) plrs) in
     --act on the card i guess
-    lift (log $ "Player " ++ show plr ++ " played " ++ show card)
-    >> (actOnCard (s {players = newplrs}) plr card)
+    lift (log $ "Player " ++ show p ++ " played " ++ show card)
+    >> (actOnCard (s {players = newplrs}) p card)
 
 
 actOnCard :: State -> Int -> Card -> RL State
