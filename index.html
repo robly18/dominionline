@@ -46,8 +46,8 @@ function sendAction(a) {
 
 function render(data) {
 	let logstate = JSON.parse(data.responseText);
-	let log = logstate[0];
-	let state = logstate[1];
+	let log = logstate[1];
+	let state = logstate[0];
 	renderLog(log);
 	document.getElementById("state").innerHTML = JSON.stringify(state);
 	console.log(state);

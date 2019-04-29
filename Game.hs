@@ -1,9 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Game (newGame, act, State, encode, decode, joinGame,
-            Action, RL, Log, forget) where
+            Action, RL,
+            module Control.Monad.Writer) where
 
-import Prelude hiding (log)
 
 import qualified Data.Sequence as S
 import Data.Maybe
@@ -13,29 +13,14 @@ import Data.Foldable
 
 import Control.Monad
 import Control.Monad.Random.Lazy (lift, RandT, StdGen)
+import Control.Monad.Writer
 import System.Random.Shuffle
 
 import Control.Lens
 
 import GHC.Generics
 
-data Log a = Log [String] a
-    deriving (Generic, Show)
-instance (ToJSON a) => ToJSON (Log a)
-instance (FromJSON a) => FromJSON (Log a)
-instance Functor Log where
-    fmap f (Log l x) = Log l $ f x
-instance Applicative Log where
-    pure x = Log [] x
-    (Log l1 f) <*> (Log l2 x) = Log (l1 ++ l2) (f x)
-instance Monad Log where
-    (Log l x) >>= f = let Log l2 y = f x in Log (l ++ l2) y
-log :: String -> Log ()
-log s = Log [s] ()
-forget :: Log a -> a
-forget (Log _ x) = x
-
-type RL = RandT StdGen Log
+type RL = RandT StdGen (Writer [String])
 
 data Card = Copper | Victory
     deriving (Generic, Show)
@@ -56,17 +41,17 @@ instance Eq Player where
 
 draw :: Player -> RL Player
 draw p = case deck p of
-            (c:cs) -> (lift $ log $ "Drawing one") >> return p {hand = c : hand p, deck = cs}
+            (c:cs) -> (lift $ tell ["Drawing one"]) >> return p {hand = c : hand p, deck = cs}
             [] -> case discarded p of
-                    [] -> (lift $ log $ "Ran out of cards") >> return p
-                    _ -> (lift $ log $ "Shuffling discarded") >> (shuffleDiscarded p) >>= draw
+                    [] -> (lift $ tell $ ["Ran out of cards"]) >> return p
+                    _ -> (lift $ tell $ ["Shuffling discarded"]) >> (shuffleDiscarded p) >>= draw
 
 shuffleDiscarded :: Player -> RL Player
 shuffleDiscarded p = do newdeck <- shuffleM (discarded p ++ deck p)
                         return $ p {discarded = [], deck = newdeck}
 
 discardDraw :: Player -> RL Player
-discardDraw p = do lift $ log $ "discard drawing"
+discardDraw p = do lift $ tell $ ["discard drawing"]
                    let pp = p {hand = [], played = [], discarded = hand p ++ played p ++ discarded p}
                    iterate (\pAnt -> draw =<< pAnt) (return pp) !! 5
 
@@ -97,7 +82,7 @@ act s (_  , Poll) = return s
 act s (plr, StartGame) = case s of
                         JoiningState plrs -> return $ GameState plr plrs [Copper, Copper, Copper, Victory, Victory, Victory]
                         GameState _ _ _ -> return s
-act s (plr, Say x) = do lift $ log $ show plr ++ ": " ++ x
+act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
 act s (plr, EndTurn) = case s of
                         JoiningState _ -> return s
@@ -109,9 +94,9 @@ act s (plr, Buy) = case s of
                         JoiningState _ -> return s
                         GameState plr2 _ _ -> if plr == plr2 then buyCard s else return s
 
-nextPlayer (GameState p plrs stack) = do lift $ log $ "Player " ++ show p ++ " ends their turn."
+nextPlayer (GameState p plrs stack) = do lift $ tell ["Player " ++ show p ++ " ends their turn."]
                                          let p2 = (p+1) `mod` (length plrs)
-                                         lift $ log $ "It's player " ++ show p2 ++"'s turn."
+                                         lift $ tell ["It's player " ++ show p2 ++"'s turn."]
                                          newplrp <- discardDraw $ plrs !! p
                                          let newplrs = set (element p) newplrp plrs
                                          return $ GameState p2 newplrs stack --todo: send played to discarded!!
@@ -130,7 +115,7 @@ playCard s@(GameState p plrs stack) i = --todo sanity checks before using !!
         newplayer = player {hand = newhand, played = card : played player}
         newplrs = (take p plrs) ++ [newplayer] ++ (drop (p+1) plrs) in
     --act on the card i guess
-    lift (log $ "Player " ++ show p ++ " played " ++ show card)
+    lift (tell ["Player " ++ show p ++ " played " ++ show card])
     >> (actOnCard (s {players = newplrs}) p card)
 
 
@@ -142,7 +127,7 @@ actOnCard s plr Copper = let plrs = players s in
 actOnCard s _ _ = return s
 
 buyCard :: State -> RL State
-buyCard s = do  lift $ log $ "Player " ++ show (playing s) ++ " buys a card."
+buyCard s = do  lift $ tell ["Player " ++ show (playing s) ++ " buys a card."]
                 let plr = getCurrentPlayer s
                 let pn = playing s
                 let plrs = players s
@@ -153,9 +138,9 @@ buyCard s = do  lift $ log $ "Player " ++ show (playing s) ++ " buys a card."
                 else do
                     return s
 
-joinGame :: State -> Log (Maybe Int, State)
+joinGame :: State -> Writer [String] (Maybe Int, State)
 joinGame (JoiningState plrs) = do let plrno = length plrs
-                                  log $ "Player " ++ show plrno ++ " joins."
+                                  tell ["Player " ++ show plrno ++ " joins."]
                                   return (Just plrno, JoiningState $ plrs ++ [newPlayer $ plrno])
 joinGame s = return (Nothing, s)
 

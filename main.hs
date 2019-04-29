@@ -11,26 +11,26 @@ import Control.Monad.Random.Lazy (lift, RandT, StdGen, runRandT, getStdGen)
 
 import Game
 
-app :: IORef (Log State, StdGen) -> Application
+app :: IORef (Writer [String] State, StdGen) -> Application
 app game request respond = case rawPathInfo request of
   "/"      -> respond index
   "/send/" -> do (state, gen) <- readIORef game
                  body <- requestBody request
                  putStrLn ("Got request with body " ++ B8.unpack body)
                  case decode $ LB8.fromStrict body of
-                    Nothing -> (putStrLn "Could not parse request.")>>(respond $ send $ encode state)
+                    Nothing -> (putStrLn "Could not parse request.")>>(respond $ send $ encode $ runWriter state)
                     Just (plr, action) -> do
                                     let newstate = lift state >>= (flip act (plr, action)) --RandT Log State
                                     let ran = runRandT newstate gen -- Log (State, StdGen)
                                     let finalstate = fmap fst ran
-                                    writeIORef game $ (finalstate, snd $ forget ran)
-                                    respond $ send $ encode finalstate
+                                    writeIORef game $ (finalstate, snd $ fst $ runWriter ran)
+                                    respond $ send $ encode $ runWriter finalstate
   "/join/" -> do putStrLn "Joining"
                  (state,gen) <- readIORef game
                  let psp = do s <- state
                               joinGame s
                  writeIORef game $ (fmap snd psp, gen)
-                 respond $ send $ encode $ fst $ forget psp
+                 respond $ send $ encode $ fst $ fst $ runWriter psp
   _        -> respond notFound
 
 
