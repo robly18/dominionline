@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE Rank2Types #-}
 module Game (newGame, act, State, encode, decode, joinGame,
             Action, RL,
             module Control.Monad.Writer) where
@@ -22,37 +23,40 @@ import GHC.Generics
 
 type RL = RandT StdGen (Writer [String])
 
-data Card = Copper | Victory
+data Card = Copper | Victory | Village | Forge --todo
     deriving (Generic, Show)
 instance ToJSON Card
 instance FromJSON Card
 
-data Player = Player { playerno :: Int,
-                       hand :: [Card],
-                       deck :: [Card],
-                       discarded :: [Card],
-                       played :: [Card],
-                       money :: Int }
+data Player = Player { _playerno :: Int,
+                       _hand :: [Card],
+                       _deck :: [Card],
+                       _discarded :: [Card],
+                       _played :: [Card],
+                       _actions :: Int,
+                       _money :: Int }
     deriving (Generic, Show)
 instance ToJSON Player
 instance FromJSON Player
 instance Eq Player where
-    p1 == p2 = playerno p1 == playerno p2
+    p1 == p2 = _playerno p1 == _playerno p2
+
+makeLenses ''Player
 
 draw :: Player -> RL Player
-draw p = case deck p of
-            (c:cs) -> (lift $ tell ["Drawing one"]) >> return p {hand = c : hand p, deck = cs}
-            [] -> case discarded p of
+draw p = case _deck p of
+            (c:cs) -> (lift $ tell ["Drawing one"]) >> return p {_hand = c : _hand p, _deck = cs}
+            [] -> case _discarded p of
                     [] -> (lift $ tell $ ["Ran out of cards"]) >> return p
                     _ -> (lift $ tell $ ["Shuffling discarded"]) >> (shuffleDiscarded p) >>= draw
 
 shuffleDiscarded :: Player -> RL Player
-shuffleDiscarded p = do newdeck <- shuffleM (discarded p ++ deck p)
-                        return $ p {discarded = [], deck = newdeck}
+shuffleDiscarded p = do newdeck <- shuffleM (_discarded p ++ _deck p)
+                        return $ p {_discarded = [], _deck = newdeck}
 
 discardDraw :: Player -> RL Player
 discardDraw p = do lift $ tell $ ["discard drawing"]
-                   let pp = p {hand = [], played = [], discarded = hand p ++ played p ++ discarded p}
+                   let pp = p {_hand = [], _played = [], _discarded = _hand p ++ _played p ++ _discarded p}
                    iterate (\pAnt -> draw =<< pAnt) (return pp) !! 5
 
 data State = JoiningState [Player]
@@ -67,6 +71,17 @@ newGame = JoiningState []
 instance ToJSON State
 instance FromJSON State
 
+playerN :: Int -> Lens' State Player
+playerN n = lens getter setter
+    where   getter s = players s !! n
+            setter s p = s {players = set (element $ n) p (players s)}
+
+currPlayer :: Lens' State Player
+currPlayer = lens getter setter
+    where   getter s = view (playerN $ playing s) s
+            setter s p = set (playerN $ playing s) p s
+
+
 data Action = Poll
             | StartGame
             | Say String
@@ -79,25 +94,26 @@ instance FromJSON Action
 
 act :: State -> (Int, Action) -> RL State --use maybe
 act s (_  , Poll) = return s
-act s (plr, StartGame) = case s of
-                        JoiningState plrs -> return $ GameState plr plrs [Copper, Copper, Copper, Victory, Victory, Victory]
-                        GameState _ _ _ -> return s
+
+act (JoiningState plrs) (plr, StartGame) = return $ GameState plr plrs [Copper, Copper, Copper, Victory, Victory, Victory]
+
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
-act s (plr, EndTurn) = case s of
-                        JoiningState _ -> return s
-                        GameState plr2 _ _ -> if plr == plr2 then nextPlayer s else return s
-act s (plr, Play i) = case s of
-                        JoiningState _ -> return s
-                        GameState plr2 _ _ -> if plr == plr2 then playCard s i else return s
-act s (plr, Buy) = case s of
-                        JoiningState _ -> return s
-                        GameState plr2 _ _ -> if plr == plr2 then buyCard s else return s
+
+act s@(GameState plr _ _) (plr2, action) = if plr /= plr2 then return s else
+        case action of
+            EndTurn -> nextPlayer s
+            Buy -> buyCard s
+            Play i -> playCard s i
+            _ -> return s
+
+act s _ = return s
 
 nextPlayer (GameState p plrs stack) = do lift $ tell ["Player " ++ show p ++ " ends their turn."]
                                          let p2 = (p+1) `mod` (length plrs)
                                          lift $ tell ["It's player " ++ show p2 ++"'s turn."]
                                          newplrp <- discardDraw $ plrs !! p
+                                         let newnewplrp = newplrp {_actions = 0, _money = 0} --i hate my life
                                          let newplrs = set (element p) newplrp plrs
                                          return $ GameState p2 newplrs stack --todo: send played to discarded!!
 
@@ -110,29 +126,27 @@ getCurrentPlayer s = players s !! playing s
 playCard :: State -> Int -> RL State
 playCard s@(GameState p plrs stack) i = --todo sanity checks before using !!
     let player = getPlayer p plrs
-        itshand = hand player
+        itshand = _hand player
         (newhand, card) = ((take i itshand) ++ (drop (i+1) itshand), itshand !! i)
-        newplayer = player {hand = newhand, played = card : played player}
+        newplayer = player {_hand = newhand, _played = card : _played player}
         newplrs = (take p plrs) ++ [newplayer] ++ (drop (p+1) plrs) in
     --act on the card i guess
     lift (tell ["Player " ++ show p ++ " played " ++ show card])
-    >> (actOnCard (s {players = newplrs}) p card)
+    >> (actOnCard p card (s {players = newplrs}))
 
 
-actOnCard :: State -> Int -> Card -> RL State
-actOnCard s plr Copper = let plrs = players s in
-                         let newplayer = (\p -> p {money = money p + 1}) $ players s !! plr in
-                         let newplrs = (take plr plrs) ++ [newplayer] ++ (drop (plr+1) plrs) in
-                         return $ s {players = newplrs}
-actOnCard s _ _ = return s
+actOnCard :: Int -> Card -> State -> RL State
+actOnCard plr Copper = return . over (currPlayer . money) (+1) --todo draw. todo figure out how to make monads work with lenses @_@
+actOnCard plr Village = return . (over currPlayer $ (over actions (+2)) . (over actions (+0))) --todo draw. todo figure out how to make monads work with lenses @_@
+actOnCard _ _ = return
 
 buyCard :: State -> RL State
 buyCard s = do  lift $ tell ["Player " ++ show (playing s) ++ " buys a card."]
                 let plr = getCurrentPlayer s
                 let pn = playing s
                 let plrs = players s
-                if money plr >= 1 then do
-                    let newplr = plr { money = money plr - 1, played = played plr ++ [head $ table s] }
+                if _money plr >= 1 then do
+                    let newplr = plr { _money = _money plr - 1, _played = _played plr ++ [head $ table s] }
                     let newplrs = (take pn plrs) ++ [newplr] ++ (drop (pn+1) plrs)
                     return s {players = newplrs, table = tail $ table s }
                 else do
@@ -145,5 +159,5 @@ joinGame (JoiningState plrs) = do let plrno = length plrs
 joinGame s = return (Nothing, s)
 
 newPlayer :: Int -> Player
-newPlayer i = Player i [Copper, Victory, Copper, Copper] [] [] [] 0
+newPlayer i = Player i [Copper, Victory, Copper, Copper] [] [] [] 0 0
 
