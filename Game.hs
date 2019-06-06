@@ -1,25 +1,37 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Game (newGame, act, State, encode, decode, joinGame,
             Action, RL,
             module Control.Monad.Writer) where
 
 
-import qualified Data.Sequence as S
 import Data.Maybe
-import Data.Aeson (encode, decode, ToJSON, FromJSON)
+import Data.Aeson
 import Data.List
 import Data.Foldable
+
+import Data.List.PointedList.Circular (fromList, focus, next, PointedList, moveN, index)
+import Data.List.PointedList (focus, prefix, suffix)
 
 import Control.Monad
 import Control.Monad.Random.Lazy (lift, RandT, StdGen)
 import Control.Monad.Writer
 import System.Random.Shuffle
 
-import Control.Lens
+import Control.Lens hiding (index, (.=))
 
 import GHC.Generics
+
+
+
+instance (ToJSON a) => ToJSON (PointedList a) where
+    toJSON list = object ["index" .= index list, "list" .= (view prefix list ++ [view focus list] ++ view suffix list)]
+instance (FromJSON a) => FromJSON (PointedList a) where
+    parseJSON (Object v) = moveN <$> (v .: "index") <*> (fromJust <$> (fromList <$> v .: "list")) 
+    parseJSON _ = mzero
 
 type RL = RandT StdGen (Writer [String])
 
@@ -60,27 +72,17 @@ discardDraw p = do lift $ tell $ ["discard drawing"]
                    iterate (\pAnt -> draw =<< pAnt) (return pp) !! 5
 
 data State = JoiningState [Player]
-           | GameState {playing :: Int, --todo define cyclical list
-                        players :: [Player],
-                        table :: [Card]}
+           | GameState {_players :: PointedList Player,
+                        _table :: [Card]}
     deriving (Generic, Show)
+
+makeLenses ''State
 
 newGame :: State
 newGame = JoiningState []
 
 instance ToJSON State
 instance FromJSON State
-
-playerN :: Int -> Lens' State Player
-playerN n = lens getter setter
-    where   getter s = players s !! n
-            setter s p = s {players = set (element $ n) p (players s)}
-
-currPlayer :: Lens' State Player
-currPlayer = lens getter setter
-    where   getter s = view (playerN $ playing s) s
-            setter s p = set (playerN $ playing s) p s
-
 
 data Action = Poll
             | StartGame
@@ -95,12 +97,12 @@ instance FromJSON Action
 act :: State -> (Int, Action) -> RL State --use maybe
 act s (_  , Poll) = return s
 
-act (JoiningState plrs) (plr, StartGame) = return $ GameState plr plrs [Copper, Copper, Copper, Victory, Victory, Victory]
+act (JoiningState plrs) (plr, StartGame) = return $ GameState (moveN plr $ fromJust $ fromList plrs) [Copper, Copper, Copper, Victory, Victory, Victory]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
 
-act s@(GameState plr _ _) (plr2, action) = if plr /= plr2 then return s else
+act s@(GameState plrs _) (plr2, action) = if index plrs /= plr2 then return s else
         case action of
             EndTurn -> nextPlayer s
             Buy -> buyCard s
@@ -109,46 +111,37 @@ act s@(GameState plr _ _) (plr2, action) = if plr /= plr2 then return s else
 
 act s _ = return s
 
-nextPlayer (GameState p plrs stack) = do lift $ tell ["Player " ++ show p ++ " ends their turn."]
-                                         let p2 = (p+1) `mod` (length plrs)
-                                         lift $ tell ["It's player " ++ show p2 ++"'s turn."]
-                                         newplrp <- discardDraw $ plrs !! p
-                                         let newnewplrp = newplrp {_actions = 0, _money = 0} --i hate my life
-                                         let newplrs = set (element p) newplrp plrs
-                                         return $ GameState p2 newplrs stack --todo: send played to discarded!!
-
-getPlayer :: Int -> [Player] -> Player
-getPlayer i plrs = plrs !! i
-
-getCurrentPlayer :: State -> Player
-getCurrentPlayer s = players s !! playing s
+nextPlayer :: State -> RL State
+nextPlayer (GameState plrs stack) = do lift $ tell ["Player " ++ show (index plrs) ++ " ends their turn."]
+                                       let newplrs = next plrs
+                                       lift $ tell ["It's player " ++ show (index plrs) ++"'s turn."]
+                                       newnewplrs <- traverseOf focus (discardDraw . set actions 0 . set money 0) plrs
+                                       return $ GameState newnewplrs stack --todo: send played to discarded!!
 
 playCard :: State -> Int -> RL State
-playCard s@(GameState p plrs stack) i = --todo sanity checks before using !!
-    let player = getPlayer p plrs
+playCard s@(GameState plrs stack) i = --todo sanity checks before using !!
+    let player = view focus plrs
         itshand = _hand player
         (newhand, card) = ((take i itshand) ++ (drop (i+1) itshand), itshand !! i)
         newplayer = player {_hand = newhand, _played = card : _played player}
-        newplrs = (take p plrs) ++ [newplayer] ++ (drop (p+1) plrs) in
+        newplrs = set focus newplayer plrs in
     --act on the card i guess
-    lift (tell ["Player " ++ show p ++ " played " ++ show card])
-    >> (actOnCard p card (s {players = newplrs}))
+    lift (tell ["Player " ++ show (index plrs) ++ " played " ++ show card])
+    >> (actOnCard (index plrs) card (s {_players = newplrs}))
 
 
 actOnCard :: Int -> Card -> State -> RL State
-actOnCard plr Copper = return . over (currPlayer . money) (+1) --todo draw. todo figure out how to make monads work with lenses @_@
-actOnCard plr Village = return . (over currPlayer $ (over actions (+2)) . (over actions (+0))) --todo draw. todo figure out how to make monads work with lenses @_@
+actOnCard plr Copper = return . over (players . focus . money) (+1) --todo draw. todo figure out how to make monads work with lenses @_@
+actOnCard plr Village = return . (over (players . focus) $ (over actions (+2)) . (over actions (+0))) --todo draw. todo figure out how to make monads work with lenses @_@
 actOnCard _ _ = return
 
 buyCard :: State -> RL State
-buyCard s = do  lift $ tell ["Player " ++ show (playing s) ++ " buys a card."]
-                let plr = getCurrentPlayer s
-                let pn = playing s
-                let plrs = players s
+buyCard s = do  lift $ tell ["Player " ++ show (index $ _players s) ++ " buys a card."]
+                let plr = view (focus) $ _players s
+                let plrs = _players s
                 if _money plr >= 1 then do
-                    let newplr = plr { _money = _money plr - 1, _played = _played plr ++ [head $ table s] }
-                    let newplrs = (take pn plrs) ++ [newplr] ++ (drop (pn+1) plrs)
-                    return s {players = newplrs, table = tail $ table s }
+                    let newplr = plr { _money = _money plr - 1, _played = _played plr ++ [head $ _table s] }
+                    return s {_players = next $ set focus newplr plrs, _table = tail $ _table s }
                 else do
                     return s
 
