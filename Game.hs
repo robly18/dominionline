@@ -114,8 +114,8 @@ act s _ = return s
 nextPlayer :: State -> RL State
 nextPlayer (GameState plrs stack) = do lift $ tell ["Player " ++ show (index plrs) ++ " ends their turn."]
                                        let newplrs = next plrs
-                                       lift $ tell ["It's player " ++ show (index plrs) ++"'s turn."]
-                                       newnewplrs <- traverseOf focus (discardDraw . set actions 0 . set money 0) plrs
+                                       lift $ tell ["It's player " ++ show (index newplrs) ++"'s turn."]
+                                       newnewplrs <- traverseOf focus (discardDraw . set actions 0 . set money 0) $ newplrs
                                        return $ GameState newnewplrs stack --todo: send played to discarded!!
 
 playCard :: State -> Int -> RL State
