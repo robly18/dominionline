@@ -120,18 +120,19 @@ nextPlayer (GameState plrs stack) = do lift $ tell ["Player " ++ show (index plr
                                        
 extractListElement :: Int -> [a] -> Maybe ([a], a)
 extractListElement 0 (x:xs) = Just (xs, x)
-extractListElement n (x:xs) = fmap (over fst (x:)) (extractListElement (n-1) xs)
+extractListElement n (x:xs) = fmap (over _1 (x:)) (extractListElement (n-1) xs)
+extractListElement _ [] = Nothing
 
 playCard :: State -> Int -> RL State
-playCard s@(GameState plrs stack) i = --todo sanity checks before using !!
-    let player = view focus plrs
-        itshand = _hand player
-        (newhand, card) = ((take i itshand) ++ (drop (i+1) itshand), itshand !! i)
-        newplayer = player {_hand = newhand, _played = card : _played player}
-        newplrs = set focus newplayer plrs in
-    --act on the card i guess
-    lift (tell ["Player " ++ show (index plrs) ++ " played " ++ show card])
-    >> (actOnCard (index plrs) card (s {_players = newplrs}))
+playCard s@(GameState plrs stack) i =
+    fromMaybe (return s)
+                (do let player = view focus plrs
+                    let itshand = _hand player
+                    (newhand, card) <- extractListElement i itshand
+                    let newplayer = player {_hand = newhand, _played = card : _played player}
+                    let newplrs = set focus newplayer plrs
+                    return (lift (tell ["Player " ++ show (index plrs) ++ " played " ++ show card])
+                            >> (actOnCard (index plrs) card (s {_players = newplrs}))))
 
 
 actOnCard :: Int -> Card -> State -> RL State
