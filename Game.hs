@@ -57,7 +57,7 @@ makeLenses ''Player
 
 draw :: Player -> RL Player
 draw p = case _deck p of
-            (c:cs) -> (lift $ tell ["Drawing one"]) >> return p {_hand = c : _hand p, _deck = cs}
+            (c:cs) -> (lift $ tell ["Drawing one"]) >> return ((over hand (c:) . set deck cs) p)
             [] -> case _discarded p of
                     [] -> (lift $ tell $ ["Ran out of cards"]) >> return p
                     _ -> (lift $ tell $ ["Shuffling discarded"]) >> (shuffleDiscarded p) >>= draw
@@ -69,7 +69,7 @@ shuffleDiscarded p = do newdeck <- shuffleM (_discarded p ++ _deck p)
 discardDraw :: Player -> RL Player
 discardDraw p = do lift $ tell $ ["discard drawing"]
                    let pp = p {_hand = [], _played = [], _discarded = _hand p ++ _played p ++ _discarded p}
-                   iterate (\pAnt -> draw =<< pAnt) (return pp) !! 5
+                   iterate (>>= draw) (return pp) !! 5 --careful. assuming there are at least 5 cards. this might be false later on.
 
 data State = JoiningState [Player]
            | GameState {_players :: PointedList Player,
@@ -97,7 +97,7 @@ instance FromJSON Action
 act :: State -> (Int, Action) -> RL State --use maybe
 act s (_  , Poll) = return s
 
-act (JoiningState plrs) (plr, StartGame) = return $ GameState (moveN plr $ fromJust $ fromList plrs) [Copper, Copper, Copper, Victory, Victory, Victory]
+act (JoiningState plrs) (plr, StartGame) = return $ GameState (moveN plr $ fromJust $ fromList plrs) [Forge, Village, Copper, Copper, Copper, Victory, Victory, Victory]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -115,8 +115,8 @@ nextPlayer :: State -> RL State
 nextPlayer (GameState plrs stack) = do lift $ tell ["Player " ++ show (index plrs) ++ " ends their turn."]
                                        let newplrs = next plrs
                                        lift $ tell ["It's player " ++ show (index newplrs) ++"'s turn."]
-                                       newnewplrs <- traverseOf focus (discardDraw . set actions 0 . set money 0) $ newplrs
-                                       return $ GameState newnewplrs stack --todo: send played to discarded!!
+                                       newnewplrs <- traverseOf focus (discardDraw . set actions 1 . set money 0) $ newplrs
+                                       return $ GameState newnewplrs stack
                                        
 extractListElement :: Int -> [a] -> Maybe ([a], a)
 extractListElement 0 (x:xs) = Just (xs, x)
@@ -142,11 +142,13 @@ actOnCard _ _ = return
 
 buyCard :: State -> RL State
 buyCard s = do  lift $ tell ["Player " ++ show (index $ _players s) ++ " buys a card."]
-                let plr = view (focus) $ _players s
-                let plrs = _players s
-                if _money plr >= 1 then do
-                    let newplr = plr { _money = _money plr - 1, _played = _played plr ++ [head $ _table s] }
-                    return s {_players = next $ set focus newplr plrs, _table = tail $ _table s }
+                let plrs = s ^?! players
+                let plr = plrs ^. focus
+                if plr ^. money >= 1 then
+                    case s ^. table of
+                        (c:cs) -> return $ s & (players . focus) %~ (over money (subtract 1) . over played (c:))
+                                             & table .~ cs
+                        [] -> return s
                 else do
                     return s
 
@@ -157,5 +159,5 @@ joinGame (JoiningState plrs) = do let plrno = length plrs
 joinGame s = return (Nothing, s)
 
 newPlayer :: Int -> Player
-newPlayer i = Player i [Copper, Victory, Copper, Copper] [] [] [] 0 0
+newPlayer i = Player i [Copper, Copper, Victory, Copper, Copper] [] [] [] 1 0
 
