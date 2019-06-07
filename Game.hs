@@ -131,14 +131,18 @@ playCard s@(GameState plrs stack) i =
                     (newhand, card) <- extractListElement i itshand
                     let newplayer = player {_hand = newhand, _played = card : _played player}
                     let newplrs = set focus newplayer plrs
+                    newstate <- actOnCard card (s {_players = newplrs})
                     return (lift (tell ["Player " ++ show (index plrs) ++ " played " ++ show card])
-                            >> (actOnCard (index plrs) card (s {_players = newplrs}))))
+                            >> newstate))
 
+action :: (State -> RL State) -> State -> Maybe (RL State)
+action a s = if s ^?! players ^. focus ^. actions == 0 then Nothing else return $ (a $ s & (players . focus . actions) %~ (subtract 1))
 
-actOnCard :: Int -> Card -> State -> RL State
-actOnCard plr Copper = return . over (players . focus . money) (+1) --todo draw. todo figure out how to make monads work with lenses @_@
-actOnCard plr Village = return . (over (players . focus) $ (over actions (+2)) . (over actions (+0))) --todo draw. todo figure out how to make monads work with lenses @_@
-actOnCard _ _ = return
+actOnCard :: Card -> State -> Maybe (RL State)
+actOnCard Copper = return .return . over (players . focus . money) (+1)
+actOnCard Village = action $ (players . focus) (draw . (over actions (+2)))
+actOnCard Forge = action $ (players . focus) ((!!3) . (iterate (>>= draw)) . return)
+actOnCard _ =  const Nothing
 
 buyCard :: State -> RL State
 buyCard s = do  lift $ tell ["Player " ++ show (index $ _players s) ++ " buys a card."]
