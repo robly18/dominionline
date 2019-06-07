@@ -117,6 +117,10 @@ nextPlayer (GameState plrs stack) = do lift $ tell ["Player " ++ show (index plr
                                        lift $ tell ["It's player " ++ show (index newplrs) ++"'s turn."]
                                        newnewplrs <- traverseOf focus (discardDraw . set actions 0 . set money 0) $ newplrs
                                        return $ GameState newnewplrs stack --todo: send played to discarded!!
+                                       
+extractListElement :: Int -> [a] -> Maybe ([a], a)
+extractListElement 0 (x:xs) = Just (xs, x)
+extractListElement n (x:xs) = fmap (over fst (x:)) (extractListElement (n-1) xs)
 
 playCard :: State -> Int -> RL State
 playCard s@(GameState plrs stack) i = --todo sanity checks before using !!
