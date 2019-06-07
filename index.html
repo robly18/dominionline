@@ -49,6 +49,16 @@ function render(data) {
 	let log = logstate[1];
 	let state = logstate[0];
 	renderLog(log);
+	switch (state.tag) {
+	case "GameState":
+		let p = state._players.list[playerno];
+		renderHand(p._hand);
+		renderDiscard(p._discarded);
+		renderPlayed(p._played);
+		renderDeck(p._deck);
+		break;
+	default: break;
+	}
 	document.getElementById("state").innerHTML = JSON.stringify(state);
 	console.log(state);
 }
@@ -70,6 +80,21 @@ function renderLog(log) {
 		logdiv.scrollTop = logdiv.scrollHeight - logdiv.clientHeight;
 }
 
+function renderCardSet(elementid, cardSet, onclickOfi, blankName) {
+	let h = document.getElementById(elementid);
+	clearNode(h);
+	for (let [i, c] of cardSet.entries()) {
+		let cb = document.createElement("button");
+		cb.innerHTML = blankName ? "?" : c;
+		cb.onclick = onclickOfi(i);
+		h.appendChild(cb);
+		h.appendChild(document.createElement("br"));
+	}
+}
+renderHand = h => renderCardSet("hand", h, i=>(()=>sendAction(playCardAction(i))), false);
+renderDiscard = d => renderCardSet("discard", d, i=>{}, false);
+renderPlayed = p => renderCardSet("played", p, i=>{}, false);
+renderDeck = d => renderCardSet("deck", d, i=>{}, true);
 
 let playerno = null;
 
@@ -142,6 +167,25 @@ onclick="nextPlayer()">End turn
 </button>
 
 <input type="text" id="text"> </input>
+
+<div>
+	<div id="handdiv">
+	<p>Hand:</p>
+	<div id="hand"></div>
+	</div>
+
+
+	<div id="discarddiv">
+	<p>Discard:</p>
+	<div id="played"></div>
+	<br>
+	<div id="discard"></div>
+	</div>
+	<div id="deckdiv">
+	<p>Deck:</p>
+	<div id="deck"></div>
+	</div>
+</div>
 
 <div
 id="log"
