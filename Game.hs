@@ -122,9 +122,9 @@ act s _ = return s
 
 nextPlayer :: State -> RL State
 nextPlayer (GameState plrs stack) = do lift $ tell ["Player " ++ show (index plrs) ++ " ends their turn."]
-                                       let newplrs = next plrs
-                                       lift $ tell ["It's player " ++ show (index newplrs) ++"'s turn."]
-                                       newnewplrs <- traverseOf focus (discardDraw . set actions 1 . set money 0) $ newplrs
+                                       newplrs <- traverseOf focus (discardDraw . set actions 1 . set money 0) $ newplrs
+                                       let newnewplrs = next plrs
+                                       lift $ tell ["It's player " ++ show (index newnewplrs) ++"'s turn."]
                                        return $ GameState newnewplrs stack
                                        
 extractListElement :: Int -> [a] -> Maybe ([a], a)

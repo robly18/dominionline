@@ -27,7 +27,7 @@ app game request respond = case rawPathInfo request of
                                     respond $ send $ encode $ runWriter $ fmap (scrambleState plr) finalstate
   "/join/" -> do putStrLn "Joining"
                  (state,gen) <- readIORef game
-                 let psp = do s <- state
+                 let psp = do s <- state --wait shouldnt this just be "state >>= joinGame"? what am i doing
                               joinGame s
                  writeIORef game $ (fmap snd psp, gen)
                  respond $ send $ encode $ fst $ fst $ runWriter psp
