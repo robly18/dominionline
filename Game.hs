@@ -106,7 +106,7 @@ instance FromJSON Action
 act :: State -> (Int, Action) -> RL State --use maybe
 act s (_  , Poll) = return s
 
-act (JoiningState plrs) (plr, StartGame) = return $ GameState (moveN plr $ fromJust $ fromList plrs) [(Copper, 10, 1), (Victory, 10, 1), (Forge, 5, 3), (Village, 5, 4)]
+act (JoiningState plrs) (plr, StartGame) = players (traverse discardDraw) $ GameState (moveN plr $ fromJust $ fromList plrs) [(Copper, 10, 1), (Victory, 10, 1), (Forge, 5, 3), (Village, 5, 4)]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -167,9 +167,9 @@ buyCard s i = fromMaybe (return s)
 joinGame :: State -> Writer [String] (Maybe Int, State)
 joinGame (JoiningState plrs) = do let plrno = length plrs
                                   tell ["Player " ++ show plrno ++ " joins."]
-                                  return (Just plrno, JoiningState $ plrs ++ [newPlayer $ plrno])
+                                  return (Just plrno, JoiningState $ plrs ++ [newPlayer plrno])
 joinGame s = return (Nothing, s)
 
 newPlayer :: Int -> Player
-newPlayer i = Player i [Copper, Copper, Victory, Copper, Copper] [] [] [] 1 0
+newPlayer i = Player i [] [] ((take 7 $ repeat Copper) ++ (take 3 $ repeat Victory)) [] 1 0
 
