@@ -122,8 +122,8 @@ act s _ = return s
 
 nextPlayer :: State -> RL State
 nextPlayer (GameState plrs stack) = do lift $ tell ["Player " ++ show (index plrs) ++ " ends their turn."]
-                                       newplrs <- traverseOf focus (discardDraw . set actions 1 . set money 0) $ newplrs
-                                       let newnewplrs = next plrs
+                                       newplrs <- traverseOf focus (discardDraw . set actions 1 . set money 0) plrs
+                                       let newnewplrs = next newplrs
                                        lift $ tell ["It's player " ++ show (index newnewplrs) ++"'s turn."]
                                        return $ GameState newnewplrs stack
                                        
