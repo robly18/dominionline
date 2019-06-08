@@ -18,13 +18,13 @@ app game request respond = case rawPathInfo request of
                  body <- requestBody request
                  putStrLn ("Got request with body " ++ B8.unpack body)
                  case decode $ LB8.fromStrict body of
-                    Nothing -> (putStrLn "Could not parse request.")>>(respond $ send $ encode $ runWriter state)
+                    Nothing -> (putStrLn "Could not parse request.")>>(respond $ send $ encode $ runWriter $ fmap (scrambleState -1) state)
                     Just (plr, action) -> do
                                     let newstate = lift state >>= (flip act (plr, action)) --RandT Log State
                                     let ran = runRandT newstate gen -- Log (State, StdGen)
                                     let finalstate = fmap fst ran
                                     writeIORef game $ (finalstate, snd $ fst $ runWriter ran)
-                                    respond $ send $ encode $ runWriter finalstate
+                                    respond $ send $ encode $ runWriter $ fmap (scrambleState plr) finalstate
   "/join/" -> do putStrLn "Joining"
                  (state,gen) <- readIORef game
                  let psp = do s <- state

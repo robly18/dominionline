@@ -3,7 +3,7 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Game (newGame, act, State, encode, decode, joinGame,
+module Game (newGame, act, State, scrambleState, encode, decode, joinGame,
             Action, RL,
             module Control.Monad.Writer) where
 
@@ -36,7 +36,7 @@ instance (FromJSON a) => FromJSON (PointedList a) where
 type RL = RandT StdGen (Writer [String])
 
 data Card = Copper | Victory | Village | Forge --todo
-    deriving (Generic, Show)
+    deriving (Generic, Show, Eq, Ord)
 instance ToJSON Card
 instance FromJSON Card
 
@@ -77,6 +77,15 @@ data State = JoiningState [Player]
     deriving (Generic, Show)
 
 makeLenses ''State
+
+scrambleState :: Int -> State -> State
+scrambleState plr s = case s of
+    JoiningState _ -> s
+    GameState _ _ -> s & players %~ fmap plrscramble
+        where plrscramble p = if p ^. playerno == plr then
+                                p & deck %~ sort
+                              else
+                                let newdeck = p ^. hand ++ p ^. deck & sort in p & deck .~ newdeck & hand .~ []
 
 newGame :: State
 newGame = JoiningState []
