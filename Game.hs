@@ -73,7 +73,7 @@ discardDraw p = do lift $ tell $ ["discard drawing"]
 
 data State = JoiningState [Player]
            | GameState {_players :: PointedList Player,
-                        _table :: [Card]}
+                        _table :: [(Card, Int, Int)]} --Card, Amount, Cost
     deriving (Generic, Show)
 
 makeLenses ''State
@@ -98,7 +98,7 @@ data Action = Poll
             | Say String
             | Play Int --play the nth card in one's hand
             | EndTurn
-            | Buy
+            | Buy Int --buy from the nth pile in the deck
     deriving (Generic, Show)
 instance ToJSON Action
 instance FromJSON Action
@@ -106,7 +106,7 @@ instance FromJSON Action
 act :: State -> (Int, Action) -> RL State --use maybe
 act s (_  , Poll) = return s
 
-act (JoiningState plrs) (plr, StartGame) = return $ GameState (moveN plr $ fromJust $ fromList plrs) [Forge, Village, Copper, Copper, Copper, Victory, Victory, Victory]
+act (JoiningState plrs) (plr, StartGame) = return $ GameState (moveN plr $ fromJust $ fromList plrs) [(Copper, 10, 1), (Victory, 10, 1), (Forge, 5, 3), (Village, 5, 4)]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -114,7 +114,7 @@ act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
 act s@(GameState plrs _) (plr2, action) = if index plrs /= plr2 then return s else
         case action of
             EndTurn -> nextPlayer s
-            Buy -> buyCard s
+            Buy i -> buyCard s i
             Play i -> playCard s i
             _ -> return s
 
@@ -153,17 +153,16 @@ actOnCard Village = action $ (players . focus) (draw . (over actions (+2)))
 actOnCard Forge = action $ (players . focus) ((!!3) . (iterate (>>= draw)) . return)
 actOnCard _ =  const Nothing
 
-buyCard :: State -> RL State
-buyCard s = do  lift $ tell ["Player " ++ show (index $ _players s) ++ " buys a card."]
-                let plrs = s ^?! players
-                let plr = plrs ^. focus
-                if plr ^. money >= 1 then
-                    case s ^. table of
-                        (c:cs) -> return $ s & (players . focus) %~ (over money (subtract 1) . over played (c:))
-                                             & table .~ cs
-                        [] -> return s
-                else do
-                    return s
+
+buyCard :: State -> Int -> RL State
+buyCard s i = fromMaybe (return s)
+                (do (c, amt, cost) <- s ^?! table ^? element i
+                    let plr = s ^?! players ^. focus
+                    if amt == 0 then Nothing
+                    else if plr ^. money < cost then Nothing
+                    else return $ lift $ tell ["Player " ++ show (index $ _players s) ++ " buys a " ++ show c ++ "."]
+                                  >> (return $ s & (players . focus) %~ (over money (subtract $ cost) . over played (c:))
+                                                 & (table . element i . _2) %~ (subtract 1)))
 
 joinGame :: State -> Writer [String] (Maybe Int, State)
 joinGame (JoiningState plrs) = do let plrno = length plrs

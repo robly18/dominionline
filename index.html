@@ -24,8 +24,8 @@ function playCardAction(c) {
 function nextPlayerAction() {
 	return {tag:"EndTurn"};
 }
-function buyCardAction() {
-    return {tag:"Buy"};
+function buyCardAction(i) {
+    return {tag:"Buy", contents:i};
 }
 
 function ajax(url, data, callback) {
@@ -51,7 +51,6 @@ function render(data) {
 	renderLog(log);
 	switch (state.tag) {
 	case "GameState":
-		if (!playerno) playerno = 0; //temporary, for testing purposes
 		let p = state._players.list[playerno];
 		renderHand(p._hand);
 		renderDiscard(p._discarded);
@@ -59,6 +58,7 @@ function render(data) {
 		renderDeck(p._deck);
 		renderPlayerData(p, playerno == state._players.index);
 		renderOtherPlayerData(state._players.list, state._players.index);
+		renderTable(state._table);
 		break;
 	default: break;
 	}
@@ -98,6 +98,17 @@ renderHand = h => renderCardSet("hand", h, i=>(()=>sendAction(playCardAction(i))
 renderDiscard = d => renderCardSet("discard", d, i=>{});
 renderPlayed = p => renderCardSet("played", p, i=>{});
 renderDeck = d => renderCardSet("deck", d, i=>{});
+
+function renderTable(table) {
+	let h = document.getElementById("table");
+	clearNode(h);
+	for (let [i, c] of table.entries()) {
+		let cb = document.createElement("button");
+		cb.innerHTML = c[0] + " (Amt:" + c[1] + "; Cost: " + c[2] + ")";
+		cb.onclick = ()=>sendAction(buyCardAction(i));
+		h.appendChild(cb);
+	}
+}
 
 function renderPlayerData(plr, nowPlaying) {
 	let dp = document.getElementById("playerdata");
@@ -151,7 +162,7 @@ function sendText() {
 }
 
 function buyCard() {
-    return sendAction(buyCardAction());
+    return sendAction(buyCardAction(parseInt(getTextboxData(), 10)));
 }
 
 function playCard() {
@@ -226,6 +237,8 @@ onclick="nextPlayer()">End turn
 	<div id="playerdata" class="hud">
 	</div>
 </div>
+
+<div id="table"></div>
 
 <div id="otherplayers"></div>
 
