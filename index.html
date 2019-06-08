@@ -57,8 +57,8 @@ function render(data) {
 		renderDiscard(p._discarded);
 		renderPlayed(p._played);
 		renderDeck(p._deck);
-		renderPlayerData(p);
-		renderOtherPlayerData(state._players.list);
+		renderPlayerData(p, playerno == state._players.index);
+		renderOtherPlayerData(state._players.list, state._players.index);
 		break;
 	default: break;
 	}
@@ -99,10 +99,10 @@ renderDiscard = d => renderCardSet("discard", d, i=>{});
 renderPlayed = p => renderCardSet("played", p, i=>{});
 renderDeck = d => renderCardSet("deck", d, i=>{});
 
-function renderPlayerData(plr) {
+function renderPlayerData(plr, nowPlaying) {
 	let dp = document.getElementById("playerdata");
 	clearNode(dp);
-	dp.appendChild(document.createTextNode("Player " + plr._playerno));
+	dp.appendChild(document.createTextNode("Player " + plr._playerno + (nowPlaying ? " 	(It's your turn!)" : "")));
 	dp.appendChild(document.createElement("br"));
 	dp.appendChild(document.createTextNode("Money: " + plr._money));
 	dp.appendChild(document.createElement("br"));
@@ -110,12 +110,12 @@ function renderPlayerData(plr) {
 	dp.appendChild(document.createElement("br"));
 }
 
-function renderOtherPlayerData(players) {
+function renderOtherPlayerData(players, curr) {
 	let opddiv = document.getElementById("otherplayers");
 	clearNode(opddiv);
 	for (let p of players) if (p._playerno != playerno) {
 		let newp = document.createElement("p");
-		newp.appendChild(document.createTextNode("Player " + p._playerno + ":"));
+		newp.appendChild(document.createTextNode((p._playerno == curr ? "Now playing > " : "") + "Player " + p._playerno + ":"));
 		newp.appendChild(document.createElement("br"));
 		newp.appendChild(document.createTextNode("Played: " + p._played.join(", ")));
 		newp.appendChild(document.createElement("br"));
