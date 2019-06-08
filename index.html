@@ -51,11 +51,13 @@ function render(data) {
 	renderLog(log);
 	switch (state.tag) {
 	case "GameState":
+		if (!playerno) playerno = 0; //temporary, for testing purposes
 		let p = state._players.list[playerno];
 		renderHand(p._hand);
 		renderDiscard(p._discarded);
 		renderPlayed(p._played);
 		renderDeck(p._deck);
+		renderPlayerData(p);
 		break;
 	default: break;
 	}
@@ -80,21 +82,32 @@ function renderLog(log) {
 		logdiv.scrollTop = logdiv.scrollHeight - logdiv.clientHeight;
 }
 
-function renderCardSet(elementid, cardSet, onclickOfi, blankName) {
+function renderCardSet(elementid, cardSet, onclickOfi) {
 	let h = document.getElementById(elementid);
 	clearNode(h);
 	for (let [i, c] of cardSet.entries()) {
 		let cb = document.createElement("button");
-		cb.innerHTML = blankName ? "?" : c;
+		cb.innerHTML = c;
 		cb.onclick = onclickOfi(i);
 		h.appendChild(cb);
 		h.appendChild(document.createElement("br"));
 	}
 }
-renderHand = h => renderCardSet("hand", h, i=>(()=>sendAction(playCardAction(i))), false);
-renderDiscard = d => renderCardSet("discard", d, i=>{}, false);
-renderPlayed = p => renderCardSet("played", p, i=>{}, false);
-renderDeck = d => renderCardSet("deck", d, i=>{}, true);
+renderHand = h => renderCardSet("hand", h, i=>(()=>sendAction(playCardAction(i))));
+renderDiscard = d => renderCardSet("discard", d, i=>{});
+renderPlayed = p => renderCardSet("played", p, i=>{});
+renderDeck = d => renderCardSet("deck", d, i=>{});
+
+function renderPlayerData(plr) {
+	let dp = document.getElementById("playerdata");
+	clearNode(dp);
+	dp.appendChild(document.createTextNode("Player " + plr._playerno));
+	dp.appendChild(document.createElement("br"));
+	dp.appendChild(document.createTextNode("Money: " + plr._money));
+	dp.appendChild(document.createElement("br"));
+	dp.appendChild(document.createTextNode("Actions: " + plr._actions));
+	dp.appendChild(document.createElement("br"));
+}
 
 let playerno = null;
 
@@ -132,6 +145,13 @@ function nextPlayer() {
     return sendAction(nextPlayerAction());
 }
 </script>
+<style>
+.hud {
+	margin:2ex;
+	display:inline-block;
+	vertical-align:top;
+}
+</style>
 </head>
 <body>
 <h1>Hello world.</h1>
@@ -169,21 +189,24 @@ onclick="nextPlayer()">End turn
 <input type="text" id="text"> </input>
 
 <div>
-	<div id="handdiv">
+	<div id="handdiv" class="hud">
 	<p>Hand:</p>
 	<div id="hand"></div>
 	</div>
 
 
-	<div id="discarddiv">
+	<div id="discarddiv" class="hud">
 	<p>Discard:</p>
 	<div id="played"></div>
 	<br>
 	<div id="discard"></div>
 	</div>
-	<div id="deckdiv">
+	<div id="deckdiv" class="hud">
 	<p>Deck:</p>
 	<div id="deck"></div>
+	</div>
+
+	<div id="playerdata" class="hud">
 	</div>
 </div>
 
