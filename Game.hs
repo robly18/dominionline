@@ -144,28 +144,59 @@ extractListElement _ [] = Nothing
 
 playCard :: State -> Int -> RL State
 playCard s@(GameState plrs stack) i =
-    fromMaybe (return s)
-                (do let player = view focus plrs
-                    let itshand = _hand player
-                    (newhand, card) <- extractListElement i itshand
-                    let newplayer = player {_hand = newhand, _played = card : _played player}
-                    let newplrs = set focus newplayer plrs
-                    newstate <- actOnCard card (s {_players = newplrs})
-                    return (lift (tell ["Player " ++ show (index plrs) ++ " played " ++ show card])
-                            >> newstate))
+                    let player = view focus plrs
+                        itshand = _hand player in
+                    case extractListElement i itshand of
+                        Nothing -> return s
+                        Just (newhand, card) -> do let newplayer = player {_hand = newhand, _played = card : _played player}
+                                                   let newplrs = set focus newplayer plrs
+                                                   newstate <- actOnCard card (s {_players = newplrs})
+                                                   case newstate of Nothing -> return s
+                                                                    Just ns -> return ns
 
 action :: (State -> RL State) -> State -> Maybe (RL State)
 action a s = if s ^?! players ^. focus ^. actions == 0 then Nothing else return $ (a $ s & (players . focus . actions) %~ (subtract 1))
 
-actOnCard :: Card -> State -> Maybe (RL State)
-actOnCard Copper = return . return . over (players . focus . money) (+1)
+data Effect = Money Int --Effects to be associated with cards
+            | Actions Int
+            | Purchases Int
+            | Draw Int
+            | Action --This isnt quite an effect, but a condition: this card expends one action
+
+actOnEffect :: Effect -> State -> RL (Maybe State)
+actOnEffect (Money i) = return . return . over (players . focus . money) (+i)
+actOnEffect (Actions i) = return . return . over (players . focus . actions) (+i)
+actOnEffect (Purchases i) = return . return . over (players . focus . purchases) (+i)
+actOnEffect (Draw i) = liftM return . (players . focus) ((!!i) . (iterate (>>= draw)) . return)
+actOnEffect Action = \s -> if s ^?! players ^. focus ^. actions > 0 then return $ return $ s & (players . focus . actions) %~ (subtract 1) else (lift $ tell ["Can't play this card! Not enough actions."]) >> return Nothing
+
+actOnEffects :: [Effect] -> State -> RL (Maybe State)
+actOnEffects [] s = return $ return s
+actOnEffects (e:es) s = do mns <- actOnEffect e s
+                           case mns of Nothing -> return Nothing
+                                       Just ns -> actOnEffects es ns
+
+effects :: Card -> [Effect]
+effects Copper = [Money 1]
+effects Silver = [Money 2]
+effects Gold = [Money 3]
+effects Village = [Action, Actions 2, Draw 1]
+effects Forge = [Action, Draw 3]
+effects Lumberjack = [Action, Money 2, Purchases 1]
+effects Market = [Action, Money 1, Actions 1, Purchases 1, Draw 1]
+effects _ = []
+
+actOnCard :: Card -> State -> RL (Maybe State)
+actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
+--actOnCard c = actOnEffect
+{-actOnCard Copper = return . return . over (players . focus . money) (+1)
 actOnCard Silver = return . return . over (players . focus . money) (+2)
 actOnCard Gold = return . return . over (players . focus . money) (+3)
 actOnCard Village = action $ (players . focus) (draw . (over actions (+2)))
 actOnCard Forge = action $ (players . focus) ((!!3) . (iterate (>>= draw)) . return)
 actOnCard Lumberjack = action $ return . over (players . focus) (over money (+2) . over purchases (+1))
 actOnCard Market = action $ (players . focus) (draw . over money (+1) . over actions (+1) . over purchases (+1))
-actOnCard _ =  const Nothing
+actOnCard _ =  const Nothing-}
 
 
 buyCard :: State -> Int -> RL State
