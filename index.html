@@ -51,7 +51,7 @@ function render(data) {
 	renderLog(log);
 	switch (state.tag) {
 	case "GameState":
-		if (playerno) {
+		if (playerno != null) {
 			let p = state._players.list[playerno];
 			renderHand(p._hand);
 			renderDiscard(p._discarded);

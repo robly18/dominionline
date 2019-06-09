@@ -35,7 +35,9 @@ instance (FromJSON a) => FromJSON (PointedList a) where
 
 type RL = RandT StdGen (Writer [String])
 
-data Card = Copper | Victory | Village | Forge --todo
+data Card = Copper | Silver | Gold
+          | Estate | Dutchy | Province
+          | Village | Forge | Lumberjack | Market
     deriving (Generic, Show, Eq, Ord)
 instance ToJSON Card
 instance FromJSON Card
@@ -57,7 +59,7 @@ instance Eq Player where
 makeLenses ''Player
 
 newPlayer :: Int -> Player
-newPlayer i = Player i [] [] ((take 7 $ repeat Copper) ++ (take 3 $ repeat Victory)) [] 1 1 0
+newPlayer i = Player i [] [] ((take 7 $ repeat Copper) ++ (take 3 $ repeat Estate)) [] 1 1 0
 
 
 draw :: Player -> RL Player
@@ -111,7 +113,10 @@ instance FromJSON Action
 act :: State -> (Int, Action) -> RL State --use maybe
 act s (_  , Poll) = return s
 
-act (JoiningState plrs) (plr, StartGame) = players (traverse discardDraw) $ GameState (moveN plr $ fromJust $ fromList plrs) [(Copper, 10, 1), (Victory, 10, 1), (Forge, 5, 3), (Village, 5, 4)]
+act (JoiningState plrs) (plr, StartGame) = players (traverse discardDraw) $ GameState (moveN plr $ fromJust $ fromList plrs)
+    [(Copper, 10, 0), (Silver, 10, 3), (Gold, 10, 6),
+     (Estate, 10, 2), (Dutchy, 10, 5), (Province, 10, 8),
+     (Forge, 10, 4), (Village, 10, 3), (Lumberjack, 10, 3), (Market, 10, 5)]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -154,8 +159,12 @@ action a s = if s ^?! players ^. focus ^. actions == 0 then Nothing else return 
 
 actOnCard :: Card -> State -> Maybe (RL State)
 actOnCard Copper = return . return . over (players . focus . money) (+1)
+actOnCard Silver = return . return . over (players . focus . money) (+2)
+actOnCard Gold = return . return . over (players . focus . money) (+3)
 actOnCard Village = action $ (players . focus) (draw . (over actions (+2)))
 actOnCard Forge = action $ (players . focus) ((!!3) . (iterate (>>= draw)) . return)
+actOnCard Lumberjack = action $ return . over (players . focus) (over money (+2) . over purchases (+1))
+actOnCard Market = action $ (players . focus) (draw . over money (+1) . over actions (+1) . over purchases (+1))
 actOnCard _ =  const Nothing
 
 
