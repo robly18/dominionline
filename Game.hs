@@ -188,15 +188,6 @@ effects _ = []
 
 actOnCard :: Card -> State -> RL (Maybe State)
 actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
---actOnCard c = actOnEffect
-{-actOnCard Copper = return . return . over (players . focus . money) (+1)
-actOnCard Silver = return . return . over (players . focus . money) (+2)
-actOnCard Gold = return . return . over (players . focus . money) (+3)
-actOnCard Village = action $ (players . focus) (draw . (over actions (+2)))
-actOnCard Forge = action $ (players . focus) ((!!3) . (iterate (>>= draw)) . return)
-actOnCard Lumberjack = action $ return . over (players . focus) (over money (+2) . over purchases (+1))
-actOnCard Market = action $ (players . focus) (draw . over money (+1) . over actions (+1) . over purchases (+1))
-actOnCard _ =  const Nothing-}
 
 
 buyCard :: State -> Int -> RL State
