@@ -144,6 +144,8 @@ function renderOtherPlayerData(players, curr) {
 		newp.appendChild(document.createElement("br"));
 		newp.appendChild(document.createTextNode("In deck and hand: " + p._deck.join(", ")));
 		newp.appendChild(document.createElement("br"));
+		newp.appendChild(document.createTextNode("In hand:" + " ?".repeat(p._hand.length)));
+		newp.appendChild(document.createElement("br"));
 		opddiv.appendChild(newp);
 	}
 }

@@ -90,7 +90,7 @@ scrambleState plr s = case s of
         where plrscramble p = if p ^. playerno == plr then
                                 p & deck %~ sort
                               else
-                                let newdeck = p ^. hand ++ p ^. deck & sort in p & deck .~ newdeck & hand .~ []
+                                let newdeck = p ^. hand ++ p ^. deck & sort in p & deck .~ newdeck & (hand . each) %~ (const Copper)
 
 newGame :: State
 newGame = JoiningState []
