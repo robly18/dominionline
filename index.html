@@ -48,24 +48,24 @@ function render(data) {
 	let logstate = JSON.parse(data.responseText);
 	let log = logstate[1];
 	let state = logstate[0];
+	document.getElementById("state").innerHTML = JSON.stringify(state);
+	console.log(state);
 	renderLog(log);
 	switch (state.tag) {
 	case "GameState":
 		if (playerno != null) {
-			let p = state._players.list[playerno];
+			let p = state.contents._players.list[playerno];
 			renderHand(p._hand);
 			renderDiscard(p._discarded);
 			renderPlayed(p._played);
 			renderDeck(p._deck);
-			renderPlayerData(p, playerno == state._players.index);
+			renderPlayerData(p, playerno == state.contents._players.index);
 		}
-		renderOtherPlayerData(state._players.list, state._players.index);
-		renderTable(state._table);
+		renderOtherPlayerData(state.contents._players.list, state.contents._players.index);
+		renderTable(state.contents._table);
 		break;
 	default: break;
 	}
-	document.getElementById("state").innerHTML = JSON.stringify(state);
-	console.log(state);
 }
 
 function renderLog(log) {

@@ -38,7 +38,7 @@ type RL = RandT StdGen (Writer [String])
 data Card = Copper | Silver | Gold
           | Estate | Dutchy | Province
           | Village | Forge | Lumberjack | Market
-          --| Cellar | Workshop | Remodel | Moat | Militia | Mine
+          -- | Cellar | Workshop | Remodel | Moat | Militia | Mine
     deriving (Generic, Show, Eq, Ord)
 instance ToJSON Card
 instance FromJSON Card
@@ -79,17 +79,26 @@ discardDraw p = do lift $ tell $ ["discard drawing"]
                    let pp = p {_hand = [], _played = [], _discarded = _hand p ++ _played p ++ _discarded p}
                    iterate (>>= draw) (return pp) !! 5 --careful. assuming there are at least 5 cards. this might be false later on.
 
-data State = JoiningState [Player]
-           | GameState {_players :: PointedList Player,
-                        _table :: [(Card, Int, Int)]} --Card, Amount, Cost
+data GameState = GS {_players :: PointedList Player,
+                     _table :: [(Card, Int, Int)]} --Card, Amount, Cost
     deriving (Generic, Show)
+makeLenses ''GameState
 
+instance ToJSON GameState
+instance FromJSON GameState
+
+data State = JoiningState [Player]
+           | GameState GameState
+    deriving (Generic, Show)
 makeLenses ''State
+
+instance ToJSON State
+instance FromJSON State
 
 scrambleState :: Int -> State -> State
 scrambleState plr s = case s of
     JoiningState _ -> s
-    GameState _ _ -> s & players %~ fmap plrscramble
+    GameState gs -> GameState $ gs & players %~ fmap plrscramble
         where plrscramble p = if p ^. playerno == plr then
                                 p & deck %~ sort
                               else
@@ -97,9 +106,6 @@ scrambleState plr s = case s of
 
 newGame :: State
 newGame = JoiningState []
-
-instance ToJSON State
-instance FromJSON State
 
 data Action = Poll
             | StartGame
@@ -111,10 +117,10 @@ data Action = Poll
 instance ToJSON Action
 instance FromJSON Action
 
-act :: State -> (Int, Action) -> RL State --use maybe
+act :: State -> (Int, Action) -> RL State 
 act s (_  , Poll) = return s
 
-act (JoiningState plrs) (plr, StartGame) = players (traverse discardDraw) $ GameState (moveN plr $ fromJust $ fromList plrs)
+act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
     [(Copper, 10, 0), (Silver, 10, 3), (Gold, 10, 6),
      (Estate, 10, 2), (Dutchy, 10, 5), (Province, 10, 8),
      (Forge, 10, 4), (Village, 10, 3), (Lumberjack, 10, 3), (Market, 10, 5)]
@@ -122,7 +128,8 @@ act (JoiningState plrs) (plr, StartGame) = players (traverse discardDraw) $ Game
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
 
-act s@(GameState plrs _) (plr2, action) = if index plrs /= plr2 then return s else
+act (GameState s@(GS _ _)) (plr2, action) = liftM GameState $
+        if index (s ^. players) /= plr2 then return s else
         case action of
             EndTurn -> nextPlayer s
             Buy i -> buyCard s i
@@ -131,32 +138,28 @@ act s@(GameState plrs _) (plr2, action) = if index plrs /= plr2 then return s el
 
 act s _ = return s
 
-nextPlayer :: State -> RL State
-nextPlayer (GameState plrs stack) = do lift $ tell ["Player " ++ show (index plrs) ++ " ends their turn."]
-                                       newplrs <- traverseOf focus (discardDraw . set actions 1 . set purchases 1 . set money 0) plrs
-                                       let newnewplrs = next newplrs
-                                       lift $ tell ["It's player " ++ show (index newnewplrs) ++"'s turn."]
-                                       return $ GameState newnewplrs stack
+nextPlayer :: GameState -> RL GameState
+nextPlayer s = do  lift $ tell ["Player " ++ show (s ^. players & index) ++ " ends their turn."]
+                   news <- (players . focus) (discardDraw . set actions 1 . set purchases 1 . set money 0) s
+                   let newnews = news & players %~ next
+                   lift $ tell ["It's player " ++ show (newnews ^. players & index) ++"'s turn."]
+                   return newnews
                                        
 extractListElement :: Int -> [a] -> Maybe ([a], a)
 extractListElement 0 (x:xs) = Just (xs, x)
 extractListElement n (x:xs) = fmap (over _1 (x:)) (extractListElement (n-1) xs)
 extractListElement _ [] = Nothing
 
-playCard :: State -> Int -> RL State
-playCard s@(GameState plrs stack) i =
-                    let player = view focus plrs
-                        itshand = _hand player in
-                    case extractListElement i itshand of
+playCard :: GameState -> Int -> RL GameState
+playCard s i = let player = s ^. players ^. focus
+                   itshand = player ^. hand in
+               case extractListElement i itshand of
                         Nothing -> return s
                         Just (newhand, card) -> do let newplayer = player {_hand = newhand, _played = card : _played player}
-                                                   let newplrs = set focus newplayer plrs
-                                                   newstate <- actOnCard card (s {_players = newplrs})
+                                                   newstate <- actOnCard card (s & (players . focus) .~ newplayer)
                                                    case newstate of Nothing -> return s
                                                                     Just ns -> return ns
 
-action :: (State -> RL State) -> State -> Maybe (RL State)
-action a s = if s ^?! players ^. focus ^. actions == 0 then Nothing else return $ (a $ s & (players . focus . actions) %~ (subtract 1))
 
 data Effect = Money Int --Effects to be associated with cards
             | Actions Int
@@ -164,14 +167,14 @@ data Effect = Money Int --Effects to be associated with cards
             | Draw Int
             | Action --This isnt quite an effect, but a condition: this card expends one action
 
-actOnEffect :: Effect -> State -> RL (Maybe State)
+actOnEffect :: Effect -> GameState -> RL (Maybe GameState)
 actOnEffect (Money i) = return . return . over (players . focus . money) (+i)
 actOnEffect (Actions i) = return . return . over (players . focus . actions) (+i)
 actOnEffect (Purchases i) = return . return . over (players . focus . purchases) (+i)
 actOnEffect (Draw i) = liftM return . (players . focus) ((!!i) . (iterate (>>= draw)) . return)
-actOnEffect Action = \s -> if s ^?! players ^. focus ^. actions > 0 then return $ return $ s & (players . focus . actions) %~ (subtract 1) else (lift $ tell ["Can't play this card! Not enough actions."]) >> return Nothing
+actOnEffect Action = \s -> if s ^. players ^. focus ^. actions > 0 then return $ return $ s & (players . focus . actions) %~ (subtract 1) else (lift $ tell ["Can't play this card! Not enough actions."]) >> return Nothing
 
-actOnEffects :: [Effect] -> State -> RL (Maybe State)
+actOnEffects :: [Effect] -> GameState -> RL (Maybe GameState)
 actOnEffects [] s = return $ return s
 actOnEffects (e:es) s = do mns <- actOnEffect e s
                            case mns of Nothing -> return Nothing
@@ -187,14 +190,14 @@ effects Lumberjack = [Action, Money 2, Purchases 1]
 effects Market = [Action, Money 1, Actions 1, Purchases 1, Draw 1]
 effects _ = []
 
-actOnCard :: Card -> State -> RL (Maybe State)
+actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
 
 
-buyCard :: State -> Int -> RL State
+buyCard :: GameState -> Int -> RL GameState
 buyCard s i = fromMaybe (return s)
-                (do (c, amt, cost) <- s ^?! table ^? element i
-                    let plr = s ^?! players ^. focus
+                (do (c, amt, cost) <- s ^. table ^? element i
+                    let plr = s ^. players ^. focus
                     if amt == 0 then Nothing
                     else if plr ^. purchases == 0 then Nothing
                     else if plr ^. money < cost then Nothing
