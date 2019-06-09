@@ -51,12 +51,14 @@ function render(data) {
 	renderLog(log);
 	switch (state.tag) {
 	case "GameState":
-		let p = state._players.list[playerno];
-		renderHand(p._hand);
-		renderDiscard(p._discarded);
-		renderPlayed(p._played);
-		renderDeck(p._deck);
-		renderPlayerData(p, playerno == state._players.index);
+		if (playerno) {
+			let p = state._players.list[playerno];
+			renderHand(p._hand);
+			renderDiscard(p._discarded);
+			renderPlayed(p._played);
+			renderDeck(p._deck);
+			renderPlayerData(p, playerno == state._players.index);
+		}
 		renderOtherPlayerData(state._players.list, state._players.index);
 		renderTable(state._table);
 		break;
@@ -119,6 +121,8 @@ function renderPlayerData(plr, nowPlaying) {
 	dp.appendChild(document.createElement("br"));
 	dp.appendChild(document.createTextNode("Actions: " + plr._actions));
 	dp.appendChild(document.createElement("br"));
+	dp.appendChild(document.createTextNode("Purchases: " + plr._purchases));
+	dp.appendChild(document.createElement("br"));
 }
 
 function renderOtherPlayerData(players, curr) {
@@ -128,11 +132,18 @@ function renderOtherPlayerData(players, curr) {
 		let newp = document.createElement("p");
 		newp.appendChild(document.createTextNode((p._playerno == curr ? "Now playing > " : "") + "Player " + p._playerno + ":"));
 		newp.appendChild(document.createElement("br"));
+		newp.appendChild(document.createTextNode("Money: " + p._money));
+		newp.appendChild(document.createElement("br"));
+		newp.appendChild(document.createTextNode("Actions: " + p._actions));
+		newp.appendChild(document.createElement("br"));
+		newp.appendChild(document.createTextNode("Purchases: " + p._purchases));
+		newp.appendChild(document.createElement("br"));
 		newp.appendChild(document.createTextNode("Played: " + p._played.join(", ")));
 		newp.appendChild(document.createElement("br"));
 		newp.appendChild(document.createTextNode("Discard: " + p._discarded.join(", ")));
 		newp.appendChild(document.createElement("br"));
 		newp.appendChild(document.createTextNode("In deck and hand: " + p._deck.join(", ")));
+		newp.appendChild(document.createElement("br"));
 		opddiv.appendChild(newp);
 	}
 }
