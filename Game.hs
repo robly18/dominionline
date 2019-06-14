@@ -14,7 +14,7 @@ import Data.List
 import Data.Foldable
 
 import Data.List.PointedList.Circular (fromList, focus, next, PointedList, moveN, index)
-import Data.List.PointedList (focus, prefix, suffix)
+import Data.List.PointedList (focus, prefix, suffix, moveTo)
 
 import Control.Monad
 import Control.Monad.Random.Lazy (lift, RandT, StdGen)
@@ -141,15 +141,18 @@ act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
 
 act (GameState s@(GS _ _)) (plr2, action) = liftM GameState $
-        {-case moveTo plr2 (s ^. players) of
+        case fmap (view focus) $ moveTo plr2 (s ^. players) of
             Nothing -> return s
-            Just p -> case action of -} --TODO
-        if index (s ^. players) /= plr2 then return s else
-        case action of
-            EndTurn -> endTurn s
-            Buy i -> buyCard s i
-            Play i -> playCard s i
-            _ -> return s
+            Just p -> case p ^. pendingChoices of
+                        [] ->   if index (s ^. players) /= plr2 then return s else
+                                case action of
+                                    EndTurn -> endTurn s
+                                    Buy i -> buyCard s i
+                                    Play i -> playCard s i
+                                    _ -> return s
+                        _ ->    case action of
+                                    Choose c -> actOnChoice s plr2 c
+                                    _ -> return s
 
 act s _ = return s
 
@@ -211,6 +214,8 @@ effects _ = []
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
 
+actOnChoice :: GameState -> Int -> Choice -> RL GameState
+actOnChoice s _ _ = return s
 
 buyCard :: GameState -> Int -> RL GameState
 buyCard s i = fromMaybe (return s)
