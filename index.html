@@ -27,6 +27,12 @@ function nextPlayerAction() {
 function buyCardAction(i) {
     return {tag:"Buy", contents:i};
 }
+function choiceAction(c) {
+	return {tag:"Choose", contents:c};
+}
+function cremodel(i, j) {
+	return {tag:"CRemodel", contents:[i,j]};
+}
 
 function ajax(url, data, callback) {
   var xhttp;
@@ -55,6 +61,7 @@ function render(data) {
 	case "GameState":
 		if (playerno != null) {
 			let p = state.contents._players.list[playerno];
+			refreshFlag(p._pendingChoices);
 			renderHand(p._hand);
 			renderDiscard(p._discarded);
 			renderPlayed(p._played);
@@ -85,21 +92,39 @@ function renderLog(log) {
 		logdiv.scrollTop = logdiv.scrollHeight - logdiv.clientHeight;
 }
 
-function renderCardSet(elementid, cardSet, onclickOfi) {
+function renderHand(cardSet) {
+	let h = document.getElementById("hand");
+	clearNode(h);
+	for (let [i, c] of cardSet.entries()) {
+		let cb = document.createElement("button");
+		cb.innerHTML = c;
+		cb.onclick = ()=>sendAction(playCardAction(i));
+		h.appendChild(cb);
+		if (flag && flag.type == "ownCard") {
+			let pc = document.createElement("button");
+			pc.innerHTML = "X";
+			pc.onclick = function() {
+				flag = flag.choiceFunc(flag, i);
+				this.style.visibility = "hidden";
+			}
+			h.appendChild(pc);
+		}
+		h.appendChild(document.createElement("br"));
+	}
+}
+function renderCardSet(elementid, cardSet) {
 	let h = document.getElementById(elementid);
 	clearNode(h);
 	for (let [i, c] of cardSet.entries()) {
 		let cb = document.createElement("button");
 		cb.innerHTML = c;
-		cb.onclick = onclickOfi(i);
 		h.appendChild(cb);
 		h.appendChild(document.createElement("br"));
 	}
 }
-renderHand = h => renderCardSet("hand", h, i=>(()=>sendAction(playCardAction(i))));
-renderDiscard = d => renderCardSet("discard", d, i=>{});
-renderPlayed = p => renderCardSet("played", p, i=>{});
-renderDeck = d => renderCardSet("deck", d, i=>{});
+renderDiscard = d => renderCardSet("discard", d);
+renderPlayed = p => renderCardSet("played", p);
+renderDeck = d => renderCardSet("deck", d);
 
 function renderTable(table) {
 	let h = document.getElementById("table");
@@ -109,6 +134,16 @@ function renderTable(table) {
 		cb.innerHTML = c[0] + " (Amt:" + c[1] + ")";
 		cb.onclick = ()=>sendAction(buyCardAction(i));
 		h.appendChild(cb);
+		if (flag && flag.type == "tableCard") {
+			let pc = document.createElement("button");
+			pc.innerHTML = "X";
+			pc.onclick = function() {
+				flag = flag.choiceFunc(flag, i);
+				this.style.visibility = "hidden";
+			}
+			h.appendChild(pc);
+		}
+		h.appendChild(document.createElement("br"));
 	}
 }
 
@@ -151,6 +186,35 @@ function renderOtherPlayerData(players, curr) {
 }
 
 let playerno = null;
+
+let flag = null;
+//when it needs to make a choice (or rather, a sequence of choices),
+//save something of the sort {type:choiceType, choiceFunc: a function that handles the next}
+//choiceFunc works as such: choiceFunc(current_flag, choice) = next_flag
+//this setup needs to be reviewed later.
+function refreshFlag(cl) {
+	if (cl == []) {flag = null; return;}
+	if (flag == null) {
+		let c0 = cl[0];
+		if (c0 == "CFRemodel") {
+			flag = makeRemodelFlag();
+		}
+	}
+}
+
+function makeRemodelFlag() {
+	return { type : "ownCard",
+			 choiceFunc : function(f, i) {
+		return { type : "tableCard",
+				 choiceFunc : function(f, j) {
+					sendAction(choiceAction(cremodel(i, j)));
+					return null;
+				}
+				}
+			}
+			}
+}
+
 
 function getPlayer(data) {
 	playerno = JSON.parse(data.responseText);
