@@ -33,6 +33,9 @@ function choiceAction(c) {
 function cremodel(i, j) {
 	return {tag:"CRemodel", contents:[i,j]};
 }
+function skipchoice() {
+	return {tag:"SkipChoice"};
+}
 
 function ajax(url, data, callback) {
   var xhttp;
@@ -62,6 +65,7 @@ function render(data) {
 		if (playerno != null) {
 			let p = state.contents._players.list[playerno];
 			refreshFlag(p._pendingChoices);
+			renderSkipChoiceButton();
 			renderHand(p._hand);
 			renderDiscard(p._discarded);
 			renderPlayed(p._played);
@@ -185,6 +189,16 @@ function renderOtherPlayerData(players, curr) {
 	}
 }
 
+
+function renderSkipChoiceButton() {
+	let scb = document.getElementById("skipChoiceButton");
+	if (flag == null) {
+		scb.style.display = "none";
+	} else {
+		scb.style.display = "block";
+	}
+}
+
 let playerno = null;
 
 let flag = null;
@@ -193,7 +207,7 @@ let flag = null;
 //choiceFunc works as such: choiceFunc(current_flag, choice) = next_flag
 //this setup needs to be reviewed later.
 function refreshFlag(cl) {
-	if (cl == []) {flag = null; return;}
+	if (cl.length == 0) {flag = null; return;}
 	if (flag == null) {
 		let c0 = cl[0];
 		if (c0 == "CFRemodel") {
@@ -292,6 +306,16 @@ onclick="nextPlayer()">End turn
 </button>
 
 <input type="text" id="text"> </input>
+
+<br>
+
+<button type="button" id="skipChoiceButton"
+onclick="sendAction(choiceAction(skipchoice()))">Skip Choice
+</button>
+
+<button type="button" id="skipChoiceButton"
+onclick="flag = null">Reset Choice
+</button>
 
 <div>
 	<div id="handdiv" class="hud">

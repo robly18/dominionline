@@ -50,6 +50,7 @@ instance FromJSON ChoiceFlag
 
 data Choice = CRemodel Int Int --Card to discard, card to purchase
             | CCellar [Int]
+            | SkipChoice --careful not to let players skip choices such as militia!
     deriving (Generic, Show)
 instance ToJSON Choice
 instance FromJSON Choice
@@ -242,6 +243,7 @@ actOnChoice s p c =
                                         return $ ss & (players . element p) %~ (set hand newhand . over played (bought:))
                                                     & (table . element ps . _2) %~ (subtract 1)
                                     else Nothing)
+                        (_, SkipChoice) -> return ss --careful not to allow this for eg militia
                         _ -> return s
                         
 
