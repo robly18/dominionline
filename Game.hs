@@ -91,7 +91,7 @@ discardDraw p = do lift $ tell $ ["discard drawing"]
                    iterate (>>= draw) (return pp) !! 5 --careful. assuming there are at least 5 cards. this might be false later on.
 
 data GameState = GS {_players :: PointedList Player,
-                     _table :: [(Card, Int, Int)]} --Card, Amount, Cost
+                     _table :: [(Card, Int)]} --Card, Amount
     deriving (Generic, Show)
 makeLenses ''GameState
 
@@ -133,9 +133,9 @@ act :: State -> (Int, Action) -> RL State
 act s (_  , Poll) = return s
 
 act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
-    [(Copper, 10, 0), (Silver, 10, 3), (Gold, 10, 6),
-     (Estate, 10, 2), (Dutchy, 10, 5), (Province, 10, 8),
-     (Forge, 10, 4), (Village, 10, 3), (Lumberjack, 10, 3), (Market, 10, 5)]
+    [(Copper, 10), (Silver, 10), (Gold, 10),
+     (Estate, 10), (Dutchy, 10), (Province, 10),
+     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10)]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -211,6 +211,19 @@ effects Market = [Action, Money 1, Actions 1, Purchases 1, Draw 1]
 effects Remodel = [Action, PlayerChoice CFRemodel]
 effects _ = []
 
+cost :: Card -> Int
+cost Copper = 0
+cost Silver = 3
+cost Gold = 6
+cost Estate = 2
+cost Dutchy = 5
+cost Province = 8
+cost Forge = 4
+cost Village = 3
+cost Lumberjack = 3
+cost Market = 5
+cost Remodel = 4
+
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
 
@@ -227,13 +240,13 @@ actOnChoice s p c =
 
 buyCard :: GameState -> Int -> RL GameState
 buyCard s i = fromMaybe (return s)
-                (do (c, amt, cost) <- s ^. table ^? element i
+                (do (c, amt) <- s ^. table ^? element i
                     let plr = s ^. players ^. focus
                     if amt == 0 then Nothing
                     else if plr ^. purchases == 0 then Nothing
-                    else if plr ^. money < cost then Nothing
+                    else if plr ^. money < cost c then Nothing
                     else return $ lift $ tell ["Player " ++ show (index $ _players s) ++ " buys a " ++ show c ++ "."]
-                                  >> (return $ s & (players . focus) %~ (over money (subtract $ cost) . over purchases (subtract 1) . over played (c:))
+                                  >> (return $ s & (players . focus) %~ (over money (subtract $ cost c) . over purchases (subtract 1) . over played (c:))
                                                  & (table . element i . _2) %~ (subtract 1)))
 
 joinGame :: State -> Writer [String] (Maybe Int, State)

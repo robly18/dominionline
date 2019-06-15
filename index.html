@@ -106,7 +106,7 @@ function renderTable(table) {
 	clearNode(h);
 	for (let [i, c] of table.entries()) {
 		let cb = document.createElement("button");
-		cb.innerHTML = c[0] + " (Amt:" + c[1] + "; Cost: " + c[2] + ")";
+		cb.innerHTML = c[0] + " (Amt:" + c[1] + ")";
 		cb.onclick = ()=>sendAction(buyCardAction(i));
 		h.appendChild(cb);
 	}
