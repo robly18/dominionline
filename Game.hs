@@ -215,7 +215,15 @@ actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
 
 actOnChoice :: GameState -> Int -> Choice -> RL GameState
-actOnChoice s _ _ = return s
+actOnChoice s p c =
+    case preview (element p) (s ^. players) of
+        Nothing -> return s
+        Just player ->
+                    let ss = s & (players . element p . pendingChoices) %~ drop 1 in
+                    case (player ^. pendingChoices ^? _head, c) of
+                        (Just CFRemodel, CRemodel kc ps) -> return ss --remove the kc'th card from player's deck, buy the ps'th, fail if price doesnt match
+                        _ -> return s
+                        
 
 buyCard :: GameState -> Int -> RL GameState
 buyCard s i = fromMaybe (return s)
