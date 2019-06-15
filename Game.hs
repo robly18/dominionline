@@ -43,12 +43,13 @@ data Card = Copper | Silver | Gold
 instance ToJSON Card
 instance FromJSON Card
 
-data ChoiceFlag = CFRemodel
+data ChoiceFlag = CFRemodel | CFCellar
     deriving (Generic, Show)
 instance ToJSON ChoiceFlag
 instance FromJSON ChoiceFlag
 
 data Choice = CRemodel Int Int --Card to discard, card to purchase
+            | CCellar [Int]
     deriving (Generic, Show)
 instance ToJSON Choice
 instance FromJSON Choice
@@ -135,7 +136,7 @@ act s (_  , Poll) = return s
 act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
     [(Copper, 10), (Silver, 10), (Gold, 10),
      (Estate, 10), (Dutchy, 10), (Province, 10),
-     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10)]
+     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10)]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -234,7 +235,13 @@ actOnChoice s p c =
         Just player ->
                     let ss = s & (players . element p . pendingChoices) %~ drop 1 in
                     case (player ^. pendingChoices ^? _head, c) of
-                        (Just CFRemodel, CRemodel kc ps) -> return ss --remove the kc'th card from player's deck, buy the ps'th, fail if price doesnt match
+                        (Just CFRemodel, CRemodel kc ps) -> return $ fromMaybe s
+                                (do (newhand, discarded) <- extractListElement kc $ player ^. hand
+                                    (bought, amt) <- s ^. table ^? element ps
+                                    if cost bought <= cost discarded + 2 then
+                                        return $ ss & (players . element p) %~ (set hand newhand . over played (bought:))
+                                                    & (table . element ps . _2) %~ (subtract 1)
+                                    else Nothing)
                         _ -> return s
                         
 
