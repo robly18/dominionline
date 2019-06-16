@@ -50,11 +50,15 @@ function ajax(url, data, callback) {
 }
 
 function sendAction(a) {
-    return ajax('/send/', makeAction(a), render);
+    return ajax('/send/', makeAction(a), d => render(d.responseText));
 }
 
-function render(data) {
-	let logstate = JSON.parse(data.responseText);
+function render(data, force_render) {
+	console.log(data);
+	if (data.responseText == previousStateString && !force_render)
+		return;
+	previousStateString = data;
+	let logstate = JSON.parse(data);
 	let log = logstate[1];
 	let state = logstate[0];
 	document.getElementById("state").innerHTML = JSON.stringify(state);
@@ -110,6 +114,7 @@ function renderHand(cardSet) {
 			pc.onclick = function() {
 				flag = flag.choiceFunc(flag, i);
 				this.style.visibility = "hidden";
+				render(previousStateString, true);
 			}
 			h.appendChild(pc);
 		}
@@ -144,6 +149,7 @@ function renderTable(table) {
 			pc.onclick = function() {
 				flag = flag.choiceFunc(flag, i);
 				this.style.visibility = "hidden";
+				render(previousStateString, true);
 			}
 			h.appendChild(pc);
 		}
@@ -206,6 +212,8 @@ let flag = null;
 //save something of the sort {type:choiceType, choiceFunc: a function that handles the next}
 //choiceFunc works as such: choiceFunc(current_flag, choice) = next_flag
 //this setup needs to be reviewed later.
+let previousStateString = null;
+
 function refreshFlag(cl) {
 	if (cl.length == 0) {flag = null; return;}
 	if (flag == null) {
@@ -310,11 +318,11 @@ onclick="nextPlayer()">End turn
 <br>
 
 <button type="button" id="skipChoiceButton"
-onclick="sendAction(choiceAction(skipchoice()))">Skip Choice
+onclick="sendAction(choiceAction(skipchoice())); render(previousStateString, true);">Skip Choice
 </button>
 
 <button type="button" id="skipChoiceButton"
-onclick="flag = null">Reset Choice
+onclick="flag = null; render(previousStateString, true);">Reset Choice
 </button>
 
 <div>
