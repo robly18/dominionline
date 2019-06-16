@@ -243,6 +243,10 @@ actOnChoice s p c =
                                         return $ ss & (players . element p) %~ (set hand newhand . over played (bought:))
                                                     & (table . element ps . _2) %~ (subtract 1)
                                     else Nothing)
+                        (Just CFCellar, CCellar cards) -> fromMaybe (return s)
+                                (do let cardsNubbed = nub cards
+                                    --todo...
+                                    return $ return s)
                         (_, SkipChoice) -> return ss --careful not to allow this for eg militia
                         _ -> return s
                         
