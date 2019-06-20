@@ -38,7 +38,7 @@ type RL = RandT StdGen (Writer [String])
 data Card = Copper | Silver | Gold
           | Estate | Dutchy | Province
           | Village | Forge | Lumberjack | Market
-          | Remodel -- | Cellar | Workshop | Moat | Militia | Mine
+          | Remodel | Cellar -- | Workshop | Moat | Militia | Mine
     deriving (Generic, Show, Eq, Ord)
 instance ToJSON Card
 instance FromJSON Card
@@ -137,7 +137,7 @@ act s (_  , Poll) = return s
 act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
     [(Copper, 10), (Silver, 10), (Gold, 10),
      (Estate, 10), (Dutchy, 10), (Province, 10),
-     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10)]
+     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10), (Cellar, 10)]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -169,6 +169,9 @@ extractListElement :: Int -> [a] -> Maybe ([a], a)
 extractListElement 0 (x:xs) = Just (xs, x)
 extractListElement n (x:xs) = fmap (over _1 (x:)) (extractListElement (n-1) xs)
 extractListElement _ [] = Nothing
+
+extractListElements :: [Int] -> [a] -> ([a], [a])
+extractListElements ixs = over both (map snd) . partition ((`elem` ixs) . fst) . zip [0..]
 
 playCard :: GameState -> Int -> RL GameState
 playCard s i = let player = s ^. players ^. focus
@@ -211,6 +214,7 @@ effects Forge = [Action, Draw 3]
 effects Lumberjack = [Action, Money 2, Purchases 1]
 effects Market = [Action, Money 1, Actions 1, Purchases 1, Draw 1]
 effects Remodel = [Action, PlayerChoice CFRemodel]
+effects Cellar = [Action, Actions 1, PlayerChoice CFCellar]
 effects _ = []
 
 cost :: Card -> Int
@@ -225,6 +229,7 @@ cost Village = 3
 cost Lumberjack = 3
 cost Market = 5
 cost Remodel = 4
+cost Cellar = 2
 
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
@@ -243,10 +248,9 @@ actOnChoice s p c =
                                         return $ ss & (players . element p) %~ (set hand newhand . over played (bought:))
                                                     & (table . element ps . _2) %~ (subtract 1)
                                     else Nothing)
-                        (Just CFCellar, CCellar cards) -> fromMaybe (return s)
-                                (do let cardsNubbed = nub cards
-                                    --todo...
-                                    return $ return s)
+                        (Just CFCellar, CCellar cards) ->
+                                (do let (removed, kept) = extractListElements cards (player ^. hand)
+                                    ss & (players . element p) ((!! length removed) . (iterate (>>= draw)) . return . set hand kept . over played (removed++)))
                         (_, SkipChoice) -> return ss --careful not to allow this for eg militia
                         _ -> return s
                         
