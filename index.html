@@ -33,6 +33,9 @@ function choiceAction(c) {
 function cremodel(i, j) {
 	return {tag:"CRemodel", contents:[i,j]};
 }
+function ccellar(cs) {
+	return {tag:"CCellar", contents:cs};
+}
 function skipchoice() {
 	return {tag:"SkipChoice"};
 }
@@ -69,7 +72,7 @@ function render(data, force_render) {
 		if (playerno != null) {
 			let p = state.contents._players.list[playerno];
 			refreshFlag(p._pendingChoices);
-			renderSkipChoiceButton();
+			renderChoiceButtons();
 			renderHand(p._hand);
 			renderDiscard(p._discarded);
 			renderPlayed(p._played);
@@ -109,14 +112,16 @@ function renderHand(cardSet) {
 		cb.onclick = ()=>sendAction(playCardAction(i));
 		h.appendChild(cb);
 		if (flag && flag.type == "ownCard") {
-			let pc = document.createElement("button");
-			pc.innerHTML = "X";
-			pc.onclick = function() {
-				flag = flag.choiceFunc(flag, i);
-				this.style.visibility = "hidden";
-				render(previousStateString, true);
+			if (flag._cards == null || flag._cards.indexOf(i) == -1) {
+				let pc = document.createElement("button");
+				pc.innerHTML = "X";
+				pc.onclick = function() {
+					flag = flag.choiceFunc(flag, i);
+					this.style.visibility = "hidden";
+					render(previousStateString, true);
+				}
+				h.appendChild(pc);
 			}
-			h.appendChild(pc);
 		}
 		h.appendChild(document.createElement("br"));
 	}
@@ -196,12 +201,21 @@ function renderOtherPlayerData(players, curr) {
 }
 
 
-function renderSkipChoiceButton() {
+function renderChoiceButtons() {
 	let scb = document.getElementById("skipChoiceButton");
+	let rcb = document.getElementById("resetChoiceButton");
+	let fcb = document.getElementById("finishChoiceButton");
 	if (flag == null) {
 		scb.style.display = "none";
+		rcb.style.display = "none";
+		fcb.style.display = "none";
 	} else {
 		scb.style.display = "block";
+		rcb.style.display = "block";
+		if ("shortCircuit" in flag)
+			fcb.style.display = "block";
+		else
+			fcb.style.display = "none";
 	}
 }
 
@@ -218,8 +232,9 @@ function refreshFlag(cl) {
 	if (cl.length == 0) {flag = null; return;}
 	if (flag == null) {
 		let c0 = cl[0];
-		if (c0 == "CFRemodel") {
-			flag = makeRemodelFlag();
+		switch (c0) {
+		case "CFRemodel": flag = makeRemodelFlag(); break;
+		case "CFCellar": flag = makeCellarFlag(); break;
 		}
 	}
 }
@@ -233,6 +248,19 @@ function makeRemodelFlag() {
 					return null;
 				}
 				}
+			}
+			}
+}
+function makeCellarFlag() {
+	return { type : "ownCard",
+			 _cards : [],
+			 shortCircuit : function(f) {
+				sendAction(choiceAction(ccellar(f._cards)));
+				return null;
+			 },
+			 choiceFunc : function(f, i) {
+				f._cards.push(i);
+				return f;
 			}
 			}
 }
@@ -321,8 +349,12 @@ onclick="nextPlayer()">End turn
 onclick="sendAction(choiceAction(skipchoice())); render(previousStateString, true);">Skip Choice
 </button>
 
-<button type="button" id="skipChoiceButton"
+<button type="button" id="resetChoiceButton"
 onclick="flag = null; render(previousStateString, true);">Reset Choice
+</button>
+
+<button type="button" id="finishChoiceButton"
+onclick="flag = flag.shortCircuit(flag); render(previousStateString, true);">Finish Choice
 </button>
 
 <div>
