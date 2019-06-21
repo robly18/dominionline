@@ -38,12 +38,12 @@ type RL = RandT StdGen (Writer [String])
 data Card = Copper | Silver | Gold
           | Estate | Dutchy | Province
           | Village | Forge | Lumberjack | Market
-          | Remodel | Cellar | Workshop | Moat | Militia -- | Mine
+          | Remodel | Cellar | Workshop | Moat | Militia | Mine
     deriving (Generic, Show, Eq, Ord)
 instance ToJSON Card
 instance FromJSON Card
 
-data ChoiceFlag = CFRemodel | CFCellar | CFWorkshop | CFMilitia
+data ChoiceFlag = CFRemodel | CFCellar | CFWorkshop | CFMilitia | CFMine
     deriving (Generic, Show)
 instance ToJSON ChoiceFlag
 instance FromJSON ChoiceFlag
@@ -52,6 +52,7 @@ data Choice = CRemodel Int Int --Card to discard, card to purchase
             | CCellar [Int] --Cards to discard
             | CWorkshop Int --Card to purchase
             | CMilitia [Int] --Cards to discard
+            | CMine Int Int --Card to discard, card to purchase
             | SkipChoice --careful not to let players skip choices such as militia!
     deriving (Generic, Show)
 instance ToJSON Choice
@@ -139,7 +140,7 @@ act s (_  , Poll) = return s
 act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
     [(Copper, 10), (Silver, 10), (Gold, 10),
      (Estate, 10), (Dutchy, 10), (Province, 10),
-     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10), (Cellar, 10), (Workshop, 10), (Moat, 10), (Militia, 10)]
+     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10), (Cellar, 10), (Workshop, 10), (Moat, 10), (Militia, 10), (Mine, 10)]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -222,6 +223,7 @@ effects Cellar = [Action, Actions 1, PlayerChoice CFCellar]
 effects Workshop = [Action, PlayerChoice CFWorkshop]
 effects Moat = [Action, Draw 2]
 effects Militia = [Action, Money 2, OtherPlayerChoice CFMilitia]
+effects Mine = [Action, PlayerChoice CFMine]
 effects _ = []
 
 cost :: Card -> Int
@@ -240,10 +242,17 @@ cost Cellar = 2
 cost Workshop = 3
 cost Moat = 2
 cost Militia = 4
+cost Mine = 5
 
 reaction :: Card -> Bool
 reaction Moat = True
 reaction _ = False
+
+treasure :: Card -> Bool
+treasure Copper = True
+treasure Silver = True
+treasure Gold = True
+treasure _ = False
 
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
@@ -277,6 +286,13 @@ actOnChoice s p c =
                                         return $ ss & (players . (element p)) %~ set hand kept . over played (removed++)
                                     else Nothing)
                         (Just CFMilitia, SkipChoice) -> return s --no skipping your duties!
+                        (Just CFMine, CMine kc ps) -> return $ fromMaybe s
+                                (do (newhand, discarded) <- extractListElement kc $ player ^. hand
+                                    (bought, amt) <- s ^. table ^? element ps
+                                    if treasure bought && treasure discarded && cost bought <= cost discarded + 3 && amt > 0 then
+                                        return $ ss & (players . element p . hand) .~ (bought:newhand)
+                                                    & (table . element ps . _2) %~ (subtract 1)
+                                    else Nothing)
                         (_, SkipChoice) -> return ss --careful not to allow this for eg militia
                         _ -> return s
                         
