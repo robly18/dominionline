@@ -202,7 +202,8 @@ actOnEffect (Purchases i) = return . return . over (players . focus . purchases)
 actOnEffect (Draw i) = liftM return . (players . focus) ((!!i) . (iterate (>>= draw)) . return)
 actOnEffect Action = \s -> if s ^. players ^. focus ^. actions > 0 then return $ return $ s & (players . focus . actions) %~ (subtract 1) else (lift $ tell ["Can't play this card! Not enough actions."]) >> return Nothing
 actOnEffect (PlayerChoice c) = return . return . over (players . focus . pendingChoices) (++[c])
-actOnEffect (OtherPlayerChoice c) = \s -> return $ return $ over players (fmap (\p -> if p ^. playerno == index (s ^. players) || any reaction (p ^. hand) then p else p & pendingChoices %~ (++[c]))) s
+actOnEffect (OtherPlayerChoice c) = \s -> return $ return $ s & (players . mapped) %~
+                (\p -> if p ^. playerno == index (s ^. players) || any reaction (p ^. hand) then p else p & pendingChoices %~ (++[c]))
 
 actOnEffects :: [Effect] -> GameState -> RL (Maybe GameState)
 actOnEffects [] s = return $ return s
