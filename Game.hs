@@ -38,12 +38,12 @@ type RL = RandT StdGen (Writer [String])
 data Card = Copper | Silver | Gold
           | Estate | Dutchy | Province
           | Village | Forge | Lumberjack | Market
-          | Remodel | Cellar | Workshop -- | Moat | Militia | Mine
+          | Remodel | Cellar | Workshop | Moat | Militia -- | Mine
     deriving (Generic, Show, Eq, Ord)
 instance ToJSON Card
 instance FromJSON Card
 
-data ChoiceFlag = CFRemodel | CFCellar | CFWorkshop
+data ChoiceFlag = CFRemodel | CFCellar | CFWorkshop | CFMilitia
     deriving (Generic, Show)
 instance ToJSON ChoiceFlag
 instance FromJSON ChoiceFlag
@@ -51,6 +51,7 @@ instance FromJSON ChoiceFlag
 data Choice = CRemodel Int Int --Card to discard, card to purchase
             | CCellar [Int] --Cards to discard
             | CWorkshop Int --Card to purchase
+            | CMilitia [Int] --Cards to discard
             | SkipChoice --careful not to let players skip choices such as militia!
     deriving (Generic, Show)
 instance ToJSON Choice
@@ -138,7 +139,7 @@ act s (_  , Poll) = return s
 act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
     [(Copper, 10), (Silver, 10), (Gold, 10),
      (Estate, 10), (Dutchy, 10), (Province, 10),
-     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10), (Cellar, 10), (Workshop, 10)]
+     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10), (Cellar, 10), (Workshop, 10), (Moat, 10), (Militia, 10)]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -191,6 +192,7 @@ data Effect = Money Int --Effects to be associated with cards
             | Draw Int
             | Action --This isnt quite an effect, but a condition: this card expends one action
             | PlayerChoice ChoiceFlag
+            | OtherPlayerChoice ChoiceFlag
 
 actOnEffect :: Effect -> GameState -> RL (Maybe GameState)
 actOnEffect (Money i) = return . return . over (players . focus . money) (+i)
@@ -199,6 +201,7 @@ actOnEffect (Purchases i) = return . return . over (players . focus . purchases)
 actOnEffect (Draw i) = liftM return . (players . focus) ((!!i) . (iterate (>>= draw)) . return)
 actOnEffect Action = \s -> if s ^. players ^. focus ^. actions > 0 then return $ return $ s & (players . focus . actions) %~ (subtract 1) else (lift $ tell ["Can't play this card! Not enough actions."]) >> return Nothing
 actOnEffect (PlayerChoice c) = return . return . over (players . focus . pendingChoices) (++[c])
+actOnEffect (OtherPlayerChoice c) = \s -> return $ return $ over players (fmap (\p -> if p ^. playerno == index (s ^. players) || any reaction (p ^. hand) then p else p & pendingChoices %~ (++[c]))) s
 
 actOnEffects :: [Effect] -> GameState -> RL (Maybe GameState)
 actOnEffects [] s = return $ return s
@@ -217,6 +220,8 @@ effects Market = [Action, Money 1, Actions 1, Purchases 1, Draw 1]
 effects Remodel = [Action, PlayerChoice CFRemodel]
 effects Cellar = [Action, Actions 1, PlayerChoice CFCellar]
 effects Workshop = [Action, PlayerChoice CFWorkshop]
+effects Moat = [Action, Draw 2]
+effects Militia = [Action, Money 2, OtherPlayerChoice CFMilitia]
 effects _ = []
 
 cost :: Card -> Int
@@ -233,6 +238,12 @@ cost Market = 5
 cost Remodel = 4
 cost Cellar = 2
 cost Workshop = 3
+cost Moat = 2
+cost Militia = 4
+
+reaction :: Card -> Bool
+reaction Moat = True
+reaction _ = False
 
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
@@ -260,6 +271,12 @@ actOnChoice s p c =
                                         return $ ss & (players . element p . played) %~ (bought:)
                                                     & (table . element bc . _2) %~ (subtract 1)
                                     else Nothing)
+                        (Just CFMilitia, CMilitia cards) -> return $ fromMaybe s
+                                (do let (removed, kept) = extractListElements cards (player ^. hand)
+                                    if length kept <= 3 then
+                                        return $ ss & (players . (element p)) %~ set hand kept . over played (removed++)
+                                    else Nothing)
+                        (Just CFMilitia, SkipChoice) -> return s --no skipping your duties!
                         (_, SkipChoice) -> return ss --careful not to allow this for eg militia
                         _ -> return s
                         
