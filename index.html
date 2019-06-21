@@ -36,6 +36,9 @@ function cremodel(i, j) {
 function ccellar(cs) {
 	return {tag:"CCellar", contents:cs};
 }
+function cworkshop(i) {
+	return {tag:"CWorkshop", contents:i};
+}
 function skipchoice() {
 	return {tag:"SkipChoice"};
 }
@@ -235,6 +238,7 @@ function refreshFlag(cl) {
 		switch (c0) {
 		case "CFRemodel": flag = makeRemodelFlag(); break;
 		case "CFCellar": flag = makeCellarFlag(); break;
+		case "CFWorkshop": flag = makeWorkshopFlag(); break;
 		}
 	}
 }
@@ -261,6 +265,14 @@ function makeCellarFlag() {
 			 choiceFunc : function(f, i) {
 				f._cards.push(i);
 				return f;
+			}
+			}
+}
+function makeWorkshopFlag() {
+	return { type : "tableCard",
+			 choiceFunc : function(f, i) {
+				sendAction(choiceAction(cworkshop(i)));
+				return null;
 			}
 			}
 }
