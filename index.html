@@ -39,6 +39,9 @@ function ccellar(cs) {
 function cworkshop(i) {
 	return {tag:"CWorkshop", contents:i};
 }
+function cmilitia(cs) {
+	return {tag:"CMilitia", contents:cs};
+}
 function skipchoice() {
 	return {tag:"SkipChoice"};
 }
@@ -239,6 +242,7 @@ function refreshFlag(cl) {
 		case "CFRemodel": flag = makeRemodelFlag(); break;
 		case "CFCellar": flag = makeCellarFlag(); break;
 		case "CFWorkshop": flag = makeWorkshopFlag(); break;
+		case "CFMilitia": flag = makeMilitiaFlag(); break;
 		}
 	}
 }
@@ -273,6 +277,19 @@ function makeWorkshopFlag() {
 			 choiceFunc : function(f, i) {
 				sendAction(choiceAction(cworkshop(i)));
 				return null;
+			}
+			}
+}
+function makeMilitiaFlag() {
+	return { type : "ownCard",
+			 _cards : [],
+			 shortCircuit : function(f) {
+				sendAction(choiceAction(cmilitia(f._cards)));
+				return null;
+			 },
+			 choiceFunc : function(f, i) {
+				f._cards.push(i);
+				return f;
 			}
 			}
 }
