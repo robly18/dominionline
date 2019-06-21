@@ -38,18 +38,19 @@ type RL = RandT StdGen (Writer [String])
 data Card = Copper | Silver | Gold
           | Estate | Dutchy | Province
           | Village | Forge | Lumberjack | Market
-          | Remodel | Cellar -- | Workshop | Moat | Militia | Mine
+          | Remodel | Cellar | Workshop -- | Moat | Militia | Mine
     deriving (Generic, Show, Eq, Ord)
 instance ToJSON Card
 instance FromJSON Card
 
-data ChoiceFlag = CFRemodel | CFCellar
+data ChoiceFlag = CFRemodel | CFCellar | CFWorkshop
     deriving (Generic, Show)
 instance ToJSON ChoiceFlag
 instance FromJSON ChoiceFlag
 
 data Choice = CRemodel Int Int --Card to discard, card to purchase
-            | CCellar [Int]
+            | CCellar [Int] --Cards to discard
+            | CWorkshop Int --Card to purchase
             | SkipChoice --careful not to let players skip choices such as militia!
     deriving (Generic, Show)
 instance ToJSON Choice
@@ -137,7 +138,7 @@ act s (_  , Poll) = return s
 act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
     [(Copper, 10), (Silver, 10), (Gold, 10),
      (Estate, 10), (Dutchy, 10), (Province, 10),
-     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10), (Cellar, 10)]
+     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10), (Cellar, 10), (Workshop, 10)]
 
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
@@ -215,6 +216,7 @@ effects Lumberjack = [Action, Money 2, Purchases 1]
 effects Market = [Action, Money 1, Actions 1, Purchases 1, Draw 1]
 effects Remodel = [Action, PlayerChoice CFRemodel]
 effects Cellar = [Action, Actions 1, PlayerChoice CFCellar]
+effects Workshop = [Action, PlayerChoice CFWorkshop]
 effects _ = []
 
 cost :: Card -> Int
@@ -230,6 +232,7 @@ cost Lumberjack = 3
 cost Market = 5
 cost Remodel = 4
 cost Cellar = 2
+cost Workshop = 3
 
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((lift $ tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
@@ -244,13 +247,19 @@ actOnChoice s p c =
                         (Just CFRemodel, CRemodel kc ps) -> return $ fromMaybe s
                                 (do (newhand, discarded) <- extractListElement kc $ player ^. hand
                                     (bought, amt) <- s ^. table ^? element ps
-                                    if cost bought <= cost discarded + 2 then
+                                    if cost bought <= cost discarded + 2 && amt > 0 then
                                         return $ ss & (players . element p) %~ (set hand newhand . over played (bought:))
                                                     & (table . element ps . _2) %~ (subtract 1)
                                     else Nothing)
                         (Just CFCellar, CCellar cards) ->
                                 (do let (removed, kept) = extractListElements cards (player ^. hand)
                                     ss & (players . element p) ((!! length removed) . (iterate (>>= draw)) . return . set hand kept . over played (removed++)))
+                        (Just CFWorkshop, CWorkshop bc) -> return $ fromMaybe s
+                                (do (bought, amt) <- s ^. table ^? element bc
+                                    if cost bought <= 4 && amt > 0 then
+                                        return $ ss & (players . element p . played) %~ (bought:)
+                                                    & (table . element bc . _2) %~ (subtract 1)
+                                    else Nothing)
                         (_, SkipChoice) -> return ss --careful not to allow this for eg militia
                         _ -> return s
                         
