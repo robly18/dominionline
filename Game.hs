@@ -145,7 +145,7 @@ act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse d
 act s (plr, Say x) = do lift $ tell [show plr ++ ": " ++ x]
                         return s
 
-act (GameState s@(GS _ _)) (plr2, action) = liftM GameState $
+act (GameState s@(GS _ _)) (plr2, action) = liftM checkGameEnd $
         case fmap (view focus) $ moveTo plr2 (s ^. players) of
             Nothing -> return s
             Just p -> case p ^. pendingChoices of
@@ -160,6 +160,9 @@ act (GameState s@(GS _ _)) (plr2, action) = liftM GameState $
                                     _ -> return s
 
 act s _ = return s
+
+checkGameEnd :: GameState -> State
+checkGameEnd s = if (length $ filter ((==0) . snd) (s ^. table)) < 3 then GameState s else GameState s
 
 endTurn :: GameState -> RL GameState --todo dont allow a player with pending choices to end turn
 endTurn s = do  lift $ tell ["Player " ++ show (s ^. players & index) ++ " ends their turn."]
