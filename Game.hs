@@ -142,7 +142,7 @@ act :: State -> (Int, Action) -> RL State
 act s (_  , Poll) = return s
 
 act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
-    (map (,1) [Copper, Silver, Gold, Estate, Dutchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine])
+    (map (,10) [Copper, Silver, Gold, Estate, Dutchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine])
 
 act s (plr, Say x) = do tell [show plr ++ ": " ++ x]
                         return s
