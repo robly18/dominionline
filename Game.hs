@@ -269,6 +269,9 @@ score Dutchy = 3
 score Province = 6
 score _ = 0
 
+cardData :: Card -> ([Effect], Int, Bool, Bool, Int) --tells you all the info about the card
+cardData c = (effects c, cost c, reaction c, treasure c, score c)
+
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
 
