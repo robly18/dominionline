@@ -8,6 +8,9 @@ function makeAction(a) {
 function startAction() {
 	return {tag:"StartGame"};
 }
+function nextGameAction() {
+	return {tag:"NextGame"};
+}
 function sayAction(c) {
 	return {tag:"Say", contents:c};
 }
@@ -73,25 +76,47 @@ function render(data, force_render) {
 	let logstate = JSON.parse(data);
 	let log = logstate[1];
 	let state = logstate[0];
+	let substate = state.tag == "EndState" ? state.contents[0] : state.contents;
 	document.getElementById("state").innerHTML = JSON.stringify(state);
 	console.log(state);
 	renderLog(log);
 	switch (state.tag) {
 	case "GameState":
+	case "EndState":
 		if (playerno != null) {
-			let p = state.contents._players.list[playerno];
+			let p = substate._players.list[playerno];
 			refreshFlag(p._pendingChoices);
 			renderChoiceButtons();
 			renderHand(p._hand);
 			renderDiscard(p._discarded);
 			renderPlayed(p._played);
 			renderDeck(p._deck);
-			renderPlayerData(p, playerno == state.contents._players.index);
+			renderPlayerData(p, playerno == substate._players.index);
 		}
-		renderOtherPlayerData(state.contents._players.list, state.contents._players.index);
-		renderTable(state.contents._table);
+		renderOtherPlayerData(substate._players.list, substate._players.index);
+		renderTable(substate._table);
 		break;
 	default: break;
+	}
+	renderEnd(state);
+}
+
+function renderEnd(state) {
+	let scoreboard = document.getElementById("scoreboard");
+	clearNode(scoreboard);
+	if (state.tag == "EndState") {
+		let sb = state.contents[1].slice().sort((a, b) => b[1] - a[1]);
+		if (sb.length == 0) return;
+		let winner = sb[0];
+		let tail = sb.slice(1);
+		let w = document.createElement("h3");
+		w.innerHTML = `Winner: Player ${winner[0]}, with ${winner[1]} points!`;
+		scoreboard.appendChild(w);
+		for (let [pn, s] of tail) {
+			let p = document.createElement("p");
+			p.innerHTML = `Player ${pn} - ${s} points!`;
+			scoreboard.appendChild(p);
+		}
 	}
 }
 
@@ -356,6 +381,8 @@ function nextPlayer() {
 <body>
 <h1>Hello world.</h1>
 
+<div id="scoreboard"></div>
+
 <br>
 
 <button type="button"
@@ -365,6 +392,10 @@ onclick="ajax('/join/', '', getPlayer)">Join
 <button type="button"
 id="start"
 onclick="sendAction(startAction())">Start
+</button>
+<button type="button"
+id="start"
+onclick="sendAction(nextGameAction())">Next Game
 </button>
 
 <br>

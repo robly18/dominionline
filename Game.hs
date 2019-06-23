@@ -2,6 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Game (newGame, act, State, scrambleState, encode, decode, joinGame,
             Action, RL,
@@ -105,6 +106,7 @@ instance FromJSON GameState
 
 data State = JoiningState [Player]
            | GameState GameState
+           | EndState GameState [(Int, Int)] --scoreboard; playerno, score;
     deriving (Generic, Show)
 makeLenses ''State
 
@@ -119,6 +121,7 @@ scrambleState plr s = case s of
                                 p & deck %~ sort
                               else
                                 let newdeck = p ^. hand ++ p ^. deck & sort in p & deck .~ newdeck & (hand . each) %~ (const Copper)
+    EndState _ _ -> s
 
 newGame :: State
 newGame = JoiningState []
@@ -130,6 +133,7 @@ data Action = Poll
             | EndTurn
             | Buy Int --buy from the nth pile in the deck
             | Choose Choice
+            | NextGame
     deriving (Generic, Show)
 instance ToJSON Action
 instance FromJSON Action
@@ -138,9 +142,7 @@ act :: State -> (Int, Action) -> RL State
 act s (_  , Poll) = return s
 
 act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
-    [(Copper, 10), (Silver, 10), (Gold, 10),
-     (Estate, 10), (Dutchy, 10), (Province, 10),
-     (Forge, 10), (Village, 10), (Lumberjack, 10), (Market, 10), (Remodel, 10), (Cellar, 10), (Workshop, 10), (Moat, 10), (Militia, 10), (Mine, 10)]
+    (map (,1) [Copper, Silver, Gold, Estate, Dutchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine])
 
 act s (plr, Say x) = do tell [show plr ++ ": " ++ x]
                         return s
@@ -159,10 +161,13 @@ act (GameState s@(GS _ _)) (plr2, action) = liftM checkGameEnd $
                                     Choose c -> actOnChoice s plr2 c
                                     _ -> return s
 
+act (EndState _ _) (_, NextGame) = return newGame
+
 act s _ = return s
 
 checkGameEnd :: GameState -> State
-checkGameEnd s = if (length $ filter ((==0) . snd) (s ^. table)) < 3 then GameState s else GameState s
+checkGameEnd s = if (length $ filter ((==0) . snd) (s ^. table)) < 3 then GameState s else
+                    EndState s (foldl (\l p -> (p ^. playerno, sum $ map score $ p ^. hand ++ p ^.deck ++ p ^. discarded ++ p ^. played):l) [] (s ^. players))
 
 endTurn :: GameState -> RL GameState --todo dont allow a player with pending choices to end turn
 endTurn s = do  tell ["Player " ++ show (s ^. players & index) ++ " ends their turn."]
@@ -257,6 +262,12 @@ treasure Copper = True
 treasure Silver = True
 treasure Gold = True
 treasure _ = False
+
+score :: Card -> Int --this isnt general enough to deal with gardens. perhaps fold this into effects eventually?
+score Estate = 1
+score Dutchy = 3
+score Province = 6
+score _ = 0
 
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
