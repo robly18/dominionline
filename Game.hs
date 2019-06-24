@@ -113,6 +113,14 @@ makeLenses ''State
 instance ToJSON State
 instance FromJSON State
 
+data Response = RPoll State
+              | RNull
+    deriving (Generic, Show)
+makeLenses ''Response
+
+instance ToJSON Response
+instance FromJSON Response
+
 scrambleState :: Int -> State -> State
 scrambleState plr s = case s of
     JoiningState _ -> s
@@ -138,16 +146,16 @@ data Action = Poll
 instance ToJSON Action
 instance FromJSON Action
 
-act :: State -> (Int, Action) -> RL State 
-act s (_  , Poll) = return s
+act :: State -> (Int, Action) -> RL (State, Response)
+act s (p, Poll) = return (s, RPoll $ scrambleState p s)
 
-act (JoiningState plrs) (plr, StartGame) = liftM GameState $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
+act (JoiningState plrs) (plr, StartGame) = liftM ((,RNull) . GameState) $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
     (map (,10) [Copper, Silver, Gold, Estate, Dutchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine])
 
 act s (plr, Say x) = do tell [show plr ++ ": " ++ x]
-                        return s
+                        return (s, RNull)
 
-act (GameState s@(GS _ _)) (plr2, action) = liftM checkGameEnd $
+act (GameState s@(GS _ _)) (plr2, action) = liftM ((,RNull) . checkGameEnd) $
         case fmap (view focus) $ moveTo plr2 (s ^. players) of
             Nothing -> return s
             Just p -> case p ^. pendingChoices of
@@ -161,9 +169,9 @@ act (GameState s@(GS _ _)) (plr2, action) = liftM checkGameEnd $
                                     Choose c -> actOnChoice s plr2 c
                                     _ -> return s
 
-act (EndState _ _) (_, NextGame) = return newGame
+act (EndState _ _) (_, NextGame) = return (newGame, RNull)
 
-act s _ = return s
+act s _ = return (s, RNull)
 
 checkGameEnd :: GameState -> State
 checkGameEnd s = if (length $ filter ((==0) . snd) (s ^. table)) < 3 then GameState s else

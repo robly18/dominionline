@@ -65,7 +65,10 @@ function ajax(url, data, callback) {
 }
 
 function sendAction(a) {
-    return ajax('/send/', makeAction(a), d => render(d.responseText));
+    return ajax('/send/', makeAction(a));
+}
+function poll() {
+    return ajax('/send/', makeAction(pollAction()), d => render(d.responseText));
 }
 
 function render(data, force_render) {
@@ -75,7 +78,7 @@ function render(data, force_render) {
 	previousStateString = data;
 	let logstate = JSON.parse(data);
 	let log = logstate[1];
-	let state = logstate[0];
+	let state = logstate[0].contents;
 	let substate = state.tag == "EndState" ? state.contents[0] : state.contents;
 	document.getElementById("state").innerHTML = JSON.stringify(state);
 	console.log(state);
@@ -83,7 +86,7 @@ function render(data, force_render) {
 	switch (state.tag) {
 	case "GameState":
 	case "EndState":
-		if (playerno != null) {
+		if (playerno != -1) {
 			let p = substate._players.list[playerno];
 			refreshFlag(p._pendingChoices);
 			renderChoiceButtons();
@@ -253,7 +256,7 @@ function renderChoiceButtons() {
 	}
 }
 
-let playerno = null;
+let playerno = -1;
 
 let flag = null;
 //when it needs to make a choice (or rather, a sequence of choices),
@@ -473,6 +476,6 @@ style="height:5em; border-style:solid; overflow:auto;"
 document.getElementById("text").onkeypress = function(k){if (k.keyCode==13) sendText();};
 
 ajax('/send/', pollAction(), render);
-window.setInterval(function(){sendAction(pollAction())}, 1000)</script>
+window.setInterval(function(){poll()}, 1000)</script>
 </body>
 </html>

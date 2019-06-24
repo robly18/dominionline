@@ -20,11 +20,12 @@ app game request respond = case rawPathInfo request of
                  case decode $ LB8.fromStrict body of
                     Nothing -> (putStrLn "Could not parse request.")>>(respond $ send $ encode $ runWriter $ fmap (scrambleState (-1)) state)
                     Just (plr, action) -> do
-                                    let newstate = lift state >>= (flip act (plr, action)) --RandT Log State
-                                    let ran = runRandT newstate gen -- Log (State, StdGen)
-                                    let finalstate = fmap fst ran
+                                    let rls = lift state >>= (flip act (plr, action)) --RL State
+                                    let ran = runRandT rls gen -- Log ((State, Response), StdGen)
+                                    let finalstate = fmap (fst . fst) ran
+                                    let response = fmap (snd . fst) ran
                                     writeIORef game $ (finalstate, snd $ fst $ runWriter ran)
-                                    respond $ send $ encode $ runWriter $ fmap (scrambleState plr) finalstate
+                                    respond $ send $ encode $ runWriter $ response
   "/join/" -> do putStrLn "Joining"
                  (state,gen) <- readIORef game
                  let psp = do s <- state --wait shouldnt this just be "state >>= joinGame"? what am i doing
