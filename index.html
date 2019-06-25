@@ -69,12 +69,13 @@ function sendAction(a) {
     return ajax('/send/', makeAction(a));
 }
 function poll() {
-    return ajax('/send/', makeAction(pollAction()), d => renderState(d.responseText));
+    return ajax('/send/', makeAction(pollAction()), d => renderStateData(d.responseText));
 }
 
-function renderState(data, force_render) {
+let previousStateString = null;
+function renderStateData(data, force_render) {
 	console.log(data);
-	if (data.responseText == previousStateString && !force_render)
+	if (data == previousStateString && !force_render)
 		return;
 	previousStateString = data;
 	let state = JSON.parse(data).contents;
@@ -121,6 +122,16 @@ function renderEnd(state) {
 	}
 }
 
+let previousLogString = null;
+function renderLogData(data) {
+	console.log(data);
+	if (data.responseText == previousLogString)
+		return;
+	previousLogString = data.responseText;
+	let log = JSON.parse(data.responseText);
+	renderLog(log);
+}
+
 function renderLog(log) {
 	let logdiv = document.getElementById("log");
 
@@ -153,7 +164,7 @@ function renderHand(cardSet) {
 				pc.onclick = function() {
 					flag = flag.choiceFunc(flag, i);
 					this.style.visibility = "hidden";
-					renderState(previousStateString, true);
+					renderStateData(previousStateString, true);
 				}
 				h.appendChild(pc);
 			}
@@ -189,7 +200,7 @@ function renderTable(table) {
 			pc.onclick = function() {
 				flag = flag.choiceFunc(flag, i);
 				this.style.visibility = "hidden";
-				renderState(previousStateString, true);
+				renderStateData(previousStateString, true);
 			}
 			h.appendChild(pc);
 		}
@@ -261,7 +272,6 @@ let flag = null;
 //save something of the sort {type:choiceType, choiceFunc: a function that handles the next}
 //choiceFunc works as such: choiceFunc(current_flag, choice) = next_flag
 //this setup needs to be reviewed later.
-let previousStateString = null;
 
 function refreshFlag(cl) {
 	if (cl.length == 0) {flag = null; return;}
@@ -423,15 +433,15 @@ onclick="nextPlayer()">End turn
 <br>
 
 <button type="button" id="skipChoiceButton"
-onclick="sendAction(choiceAction(skipchoice())); renderState(previousStateString, true);">Skip Choice
+onclick="sendAction(choiceAction(skipchoice())); renderStateData(previousStateString, true);">Skip Choice
 </button>
 
 <button type="button" id="resetChoiceButton"
-onclick="flag = null; renderState(previousStateString, true);">Reset Choice
+onclick="flag = null; renderStateData(previousStateString, true);">Reset Choice
 </button>
 
 <button type="button" id="finishChoiceButton"
-onclick="flag = flag.shortCircuit(flag); renderState(previousStateString, true);">Finish Choice
+onclick="flag = flag.shortCircuit(flag); renderStateData(previousStateString, true);">Finish Choice
 </button>
 
 <div>
@@ -473,7 +483,7 @@ style="height:5em; border-style:solid; overflow:auto;"
 <script>
 document.getElementById("text").onkeypress = function(k){if (k.keyCode==13) sendText();};
 
-ajax('/send/', pollAction(), renderState);
+window.setInterval(function(){ajax('/log/', null, renderLogData)}, 1000);
 window.setInterval(function(){poll()}, 1000)</script>
 </body>
 </html>

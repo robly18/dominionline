@@ -25,7 +25,10 @@ app game request respond = case rawPathInfo request of
                                     let finalstate = fmap (fst . fst) ran
                                     let response = snd $ fst $ fst $ runWriter ran
                                     writeIORef game $ (finalstate, snd $ fst $ runWriter ran)
-                                    respond $ send $ encode $  response
+                                    respond $ send $ encode $ response
+  "/log/"  -> do (state, _) <- readIORef game
+                 putStrLn "Got Log request"
+                 respond $ send $ encode $ snd $ runWriter state
   "/join/" -> do putStrLn "Joining"
                  (state,gen) <- readIORef game
                  let psp = do s <- state --wait shouldnt this just be "state >>= joinGame"? what am i doing
