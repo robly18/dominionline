@@ -14,9 +14,6 @@ import Data.Aeson
 import Data.List
 import Data.Foldable
 
-import Data.List.PointedList.Circular (fromList, focus, next, PointedList, moveN, index)
-import Data.List.PointedList (focus, prefix, suffix, moveTo)
-
 import Control.Monad
 import Control.Monad.Random.Lazy (lift, RandT, StdGen)
 import Control.Monad.Writer
@@ -26,94 +23,53 @@ import Control.Lens hiding (index, (.=), Choice)
 
 import GHC.Generics
 
+import Cards
+import State
+import PointedList
+import Data.List.PointedList (focus, index, moveTo, fromList)
+import Data.List.PointedList.Circular (next, moveN)
 
 
-instance (ToJSON a) => ToJSON (PointedList a) where
-    toJSON list = object ["index" .= index list, "list" .= (view prefix list ++ [view focus list] ++ view suffix list)]
-instance (FromJSON a) => FromJSON (PointedList a) where
-    parseJSON (Object v) = moveN <$> (v .: "index") <*> (fromJust <$> (fromList <$> v .: "list")) 
-    parseJSON _ = mzero
 
 type RL = RandT StdGen (Writer [String])
 
-data Card = Copper | Silver | Gold
-          | Estate | Dutchy | Province
-          | Village | Forge | Lumberjack | Market
-          | Remodel | Cellar | Workshop | Moat | Militia | Mine
-    deriving (Generic, Show, Eq, Ord)
-instance ToJSON Card
-instance FromJSON Card
 
-data ChoiceFlag = CFRemodel | CFCellar | CFWorkshop | CFMilitia | CFMine
-    deriving (Generic, Show)
-instance ToJSON ChoiceFlag
-instance FromJSON ChoiceFlag
 
-data Choice = CRemodel Int Int --Card to discard, card to purchase
-            | CCellar [Int] --Cards to discard
-            | CWorkshop Int --Card to purchase
-            | CMilitia [Int] --Cards to discard
-            | CMine Int Int --Card to discard, card to purchase
-            | SkipChoice --careful not to let players skip choices such as militia!
-    deriving (Generic, Show)
-instance ToJSON Choice
-instance FromJSON Choice
+actOnEffect :: Effect -> GameState -> RL (Maybe GameState)
+actOnEffect (Money i) = return . return . over (players . focus . money) (+i)
+actOnEffect (Actions i) = return . return . over (players . focus . actions) (+i)
+actOnEffect (Purchases i) = return . return . over (players . focus . purchases) (+i)
+actOnEffect (Draw i) = liftM return . (players . focus) ((!!i) . (iterate (>>= draw)) . return)
+actOnEffect Action = \s -> if s ^. players ^. focus ^. actions > 0 then return $ return $ s & (players . focus . actions) %~ (subtract 1) else (tell ["Can't play this card! Not enough actions."]) >> return Nothing
+actOnEffect (PlayerChoice c) = return . return . over (players . focus . pendingChoices) (++[c])
+actOnEffect (OtherPlayerChoice c) = \s -> return $ return $ s & (players . mapped) %~
+                (\p -> if p ^. playerno == index (s ^. players) || any reaction (p ^. hand) then p else p & pendingChoices %~ (++[c]))
 
-data Player = Player { _playerno :: Int,
-                       _hand :: [Card],
-                       _deck :: [Card],
-                       _discarded :: [Card],
-                       _played :: [Card],
-                       _actions :: Int,
-                       _purchases :: Int,
-                       _money :: Int,
-                       _pendingChoices :: [ChoiceFlag]}
-    deriving (Generic, Show)
-instance ToJSON Player
-instance FromJSON Player
-instance Eq Player where
-    p1 == p2 = _playerno p1 == _playerno p2
-
-makeLenses ''Player
-
-newPlayer :: Int -> Player
-newPlayer i = Player i [] [] ((take 7 $ repeat Copper) ++ (take 3 $ repeat Estate)) [] 1 1 0 []
-
+actOnEffects :: [Effect] -> GameState -> RL (Maybe GameState)
+actOnEffects [] s = return $ return s
+actOnEffects (e:es) s = do mns <- actOnEffect e s
+                           case mns of Nothing -> return Nothing
+                                       Just ns -> actOnEffects es ns
 
 draw :: Player -> RL Player
-draw p = case _deck p of
+draw p = case p ^. deck of
             (c:cs) -> (tell ["Drawing one"]) >> return ((over hand (c:) . set deck cs) p)
-            [] -> case _discarded p of
+            [] -> case p ^. discarded of
                     [] -> (tell $ ["Ran out of cards"]) >> return p
                     _ -> (tell $ ["Shuffling discarded"]) >> (shuffleDiscarded p) >>= draw
 
 shuffleDiscarded :: Player -> RL Player
-shuffleDiscarded p = do newdeck <- shuffleM (_discarded p ++ _deck p)
-                        return $ p {_discarded = [], _deck = newdeck}
+shuffleDiscarded p = do newdeck <- shuffleM (p ^. discarded ++ p ^. deck)
+                        return $ p  & discarded .~ [] & deck .~ newdeck
 
 discardDraw :: Player -> RL Player
 discardDraw p = do tell $ ["discard drawing"]
-                   let pp = p {_hand = [], _played = [], _discarded = _hand p ++ _played p ++ _discarded p}
+                   let pp = p & hand .~ [] & played .~ [] & discarded .~ p ^. hand ++ p ^. played ++ p ^. discarded
                    iterate (>>= draw) (return pp) !! 5 --careful. assuming there are at least 5 cards. this might be false later on.
 
-data GameState = GS {_players :: PointedList Player,
-                     _table :: [(Card, Int)]} --Card, Amount
-    deriving (Generic, Show)
-makeLenses ''GameState
-
-instance ToJSON GameState
-instance FromJSON GameState
-
-data State = JoiningState [Player]
-           | GameState GameState
-           | EndState GameState [(Int, Int)] --scoreboard; playerno, score;
-    deriving (Generic, Show)
-makeLenses ''State
-
-instance ToJSON State
-instance FromJSON State
 
 data Response = RPoll State
+              | RCardData CardData
               | RNull
     deriving (Generic, Show)
 makeLenses ''Response
@@ -121,20 +77,8 @@ makeLenses ''Response
 instance ToJSON Response
 instance FromJSON Response
 
-scrambleState :: Int -> State -> State
-scrambleState plr s = case s of
-    JoiningState _ -> s
-    GameState gs -> GameState $ gs & players %~ fmap plrscramble
-        where plrscramble p = if p ^. playerno == plr then
-                                p & deck %~ sort
-                              else
-                                let newdeck = p ^. hand ++ p ^. deck & sort in p & deck .~ newdeck & (hand . each) %~ (const Copper)
-    EndState _ _ -> s
-
-newGame :: State
-newGame = JoiningState []
-
 data Action = Poll
+            | PollCard Card
             | StartGame
             | Say String
             | Play Int --play the nth card in one's hand
@@ -148,6 +92,8 @@ instance FromJSON Action
 
 act :: State -> (Int, Action) -> RL (State, Response)
 act s (p, Poll) = return (s, RPoll $ scrambleState p s)
+
+act s (_, PollCard c) = return (s, RCardData $ cardData c)
 
 act (JoiningState plrs) (plr, StartGame) = liftM ((,RNull) . GameState) $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
     (map (,10) [Copper, Silver, Gold, Estate, Dutchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine])
@@ -197,88 +143,10 @@ playCard s i = let player = s ^. players ^. focus
                    itshand = player ^. hand in
                case extractListElement i itshand of
                         Nothing -> return s
-                        Just (newhand, card) -> do let newplayer = player {_hand = newhand, _played = card : _played player}
+                        Just (newhand, card) -> do let newplayer = player & hand .~ newhand & played .~ card : player ^. played
                                                    newstate <- actOnCard card (s & (players . focus) .~ newplayer)
                                                    case newstate of Nothing -> return s
                                                                     Just ns -> return ns
-
-
-data Effect = Money Int --Effects to be associated with cards
-            | Actions Int
-            | Purchases Int
-            | Draw Int
-            | Action --This isnt quite an effect, but a condition: this card expends one action
-            | PlayerChoice ChoiceFlag
-            | OtherPlayerChoice ChoiceFlag
-
-actOnEffect :: Effect -> GameState -> RL (Maybe GameState)
-actOnEffect (Money i) = return . return . over (players . focus . money) (+i)
-actOnEffect (Actions i) = return . return . over (players . focus . actions) (+i)
-actOnEffect (Purchases i) = return . return . over (players . focus . purchases) (+i)
-actOnEffect (Draw i) = liftM return . (players . focus) ((!!i) . (iterate (>>= draw)) . return)
-actOnEffect Action = \s -> if s ^. players ^. focus ^. actions > 0 then return $ return $ s & (players . focus . actions) %~ (subtract 1) else (tell ["Can't play this card! Not enough actions."]) >> return Nothing
-actOnEffect (PlayerChoice c) = return . return . over (players . focus . pendingChoices) (++[c])
-actOnEffect (OtherPlayerChoice c) = \s -> return $ return $ s & (players . mapped) %~
-                (\p -> if p ^. playerno == index (s ^. players) || any reaction (p ^. hand) then p else p & pendingChoices %~ (++[c]))
-
-actOnEffects :: [Effect] -> GameState -> RL (Maybe GameState)
-actOnEffects [] s = return $ return s
-actOnEffects (e:es) s = do mns <- actOnEffect e s
-                           case mns of Nothing -> return Nothing
-                                       Just ns -> actOnEffects es ns
-
-effects :: Card -> [Effect]
-effects Copper = [Money 1]
-effects Silver = [Money 2]
-effects Gold = [Money 3]
-effects Village = [Action, Actions 2, Draw 1]
-effects Forge = [Action, Draw 3]
-effects Lumberjack = [Action, Money 2, Purchases 1]
-effects Market = [Action, Money 1, Actions 1, Purchases 1, Draw 1]
-effects Remodel = [Action, PlayerChoice CFRemodel]
-effects Cellar = [Action, Actions 1, PlayerChoice CFCellar]
-effects Workshop = [Action, PlayerChoice CFWorkshop]
-effects Moat = [Action, Draw 2]
-effects Militia = [Action, Money 2, OtherPlayerChoice CFMilitia]
-effects Mine = [Action, PlayerChoice CFMine]
-effects _ = []
-
-cost :: Card -> Int
-cost Copper = 0
-cost Silver = 3
-cost Gold = 6
-cost Estate = 2
-cost Dutchy = 5
-cost Province = 8
-cost Forge = 4
-cost Village = 3
-cost Lumberjack = 3
-cost Market = 5
-cost Remodel = 4
-cost Cellar = 2
-cost Workshop = 3
-cost Moat = 2
-cost Militia = 4
-cost Mine = 5
-
-reaction :: Card -> Bool
-reaction Moat = True
-reaction _ = False
-
-treasure :: Card -> Bool
-treasure Copper = True
-treasure Silver = True
-treasure Gold = True
-treasure _ = False
-
-score :: Card -> Int --this isnt general enough to deal with gardens. perhaps fold this into effects eventually?
-score Estate = 1
-score Dutchy = 3
-score Province = 6
-score _ = 0
-
-cardData :: Card -> ([Effect], Int, Bool, Bool, Int) --tells you all the info about the card
-cardData c = (effects c, cost c, reaction c, treasure c, score c)
 
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = ((tell ["Playing " ++ show c]) >>) . actOnEffects (effects c)
@@ -330,7 +198,7 @@ buyCard s i = fromMaybe (return s)
                     if amt == 0 then Nothing
                     else if plr ^. purchases == 0 then Nothing
                     else if plr ^. money < cost c then Nothing
-                    else return $ tell ["Player " ++ show (index $ _players s) ++ " buys a " ++ show c ++ "."]
+                    else return $ tell ["Player " ++ show (index $ s ^. players) ++ " buys a " ++ show c ++ "."]
                                   >> (return $ s & (players . focus) %~ (over money (subtract $ cost c) . over purchases (subtract 1) . over played (c:))
                                                  & (table . element i . _2) %~ (subtract 1)))
 
