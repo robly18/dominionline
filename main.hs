@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Network.Wai
 import Network.HTTP.Types
+import Network.HTTP.Types.Status
 import Network.Wai.Handler.Warp (run)
 import Data.IORef
 import Data.Monoid
@@ -18,7 +19,7 @@ app game request respond = case rawPathInfo request of
                  body <- requestBody request
                  putStrLn ("Got request with body " ++ B8.unpack body)
                  case decode $ LB8.fromStrict body of
-                    Nothing -> (putStrLn "Could not parse request.")>>(respond $ send $ encode $ runWriter $ fmap (scrambleState (-1)) state)
+                    Nothing -> (putStrLn "Could not parse request.")>>(respond $ badRequest)
                     Just (plr, action) -> do
                                     let rls = lift state >>= (flip act (plr, action)) --RL State
                                     let ran = runRandT rls gen -- Log ((State, Response), StdGen)
@@ -50,6 +51,12 @@ notFound = responseLBS
     status404
     [("Content-Type", "text/plain")]
     "404"
+
+badRequest :: Response
+badRequest = responseLBS
+    badRequest400
+    [("Content-Type", "text/plain")]
+    "400"
 
 send :: LB8.ByteString -> Response
 send c = responseLBS
