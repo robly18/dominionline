@@ -19,7 +19,9 @@ function sayAction(c) {
 function pollAction() {
 	return {tag:"Poll"};
 }
-
+function pollCardAction(c) {
+	return {tag:"PollCard", contents:c};
+}
 
 function playCardAction(c) {
 	return {tag:"Play", contents:c};
@@ -70,6 +72,9 @@ function sendAction(a) {
 }
 function poll() {
     return ajax('/send/', makeAction(pollAction()), d => renderStateData(d.responseText));
+}
+function pollCard(c) {
+    return ajax('/send/', makeAction(pollCardAction(c)), d => knowncards[c] = JSON.parse(d.responseText));
 }
 
 let previousStateString = null;
@@ -157,6 +162,7 @@ function renderHand(cardSet) {
 		cb.innerHTML = c;
 		cb.onclick = ()=>sendAction(playCardAction(i));
 		h.appendChild(cb);
+		h.appendChild(cardInfoNode(c));
 		if (flag && flag.type == "ownCard") {
 			if (flag._cards == null || flag._cards.indexOf(i) == -1) {
 				let pc = document.createElement("button");
@@ -179,6 +185,7 @@ function renderCardSet(elementid, cardSet) {
 		let cb = document.createElement("button");
 		cb.innerHTML = c;
 		h.appendChild(cb);
+		h.appendChild(cardInfoNode(c));
 		h.appendChild(document.createElement("br"));
 	}
 }
@@ -194,6 +201,7 @@ function renderTable(table) {
 		cb.innerHTML = c[0] + " (Amt:" + c[1] + ")";
 		cb.onclick = ()=>sendAction(buyCardAction(i));
 		h.appendChild(cb);
+		h.appendChild(cardInfoNode(c[0]));
 		if (flag && flag.type == "tableCard") {
 			let pc = document.createElement("button");
 			pc.innerHTML = "X";
@@ -224,6 +232,17 @@ function renderPlayerData(plr, nowPlaying) {
 function renderOtherPlayerData(players, curr) {
 	let opddiv = document.getElementById("otherplayers");
 	clearNode(opddiv);
+
+	function cardListNode(clist) {
+		let p = document.createElement("p");
+		for (let c of clist) {
+			p.appendChild(document.createTextNode(c));
+			p.appendChild(cardInfoNode(c));
+		}
+		p.style.display = "inline";
+		return p;
+	}
+
 	for (let p of players) if (p._playerno != playerno) {
 		let newp = document.createElement("p");
 		newp.appendChild(document.createTextNode((p._playerno == curr ? "Now playing > " : "") + "Player " + p._playerno + ":"));
@@ -234,11 +253,14 @@ function renderOtherPlayerData(players, curr) {
 		newp.appendChild(document.createElement("br"));
 		newp.appendChild(document.createTextNode("Purchases: " + p._purchases));
 		newp.appendChild(document.createElement("br"));
-		newp.appendChild(document.createTextNode("Played: " + p._played.join(", ")));
+		newp.appendChild(document.createTextNode("Played: "));
+		newp.appendChild(cardListNode(p._played));
 		newp.appendChild(document.createElement("br"));
-		newp.appendChild(document.createTextNode("Discard: " + p._discarded.join(", ")));
+		newp.appendChild(document.createTextNode("Discard: "));
+		newp.appendChild(cardListNode(p._discarded));
 		newp.appendChild(document.createElement("br"));
-		newp.appendChild(document.createTextNode("In deck and hand: " + p._deck.join(", ")));
+		newp.appendChild(document.createTextNode("In deck and hand: "));
+		newp.appendChild(cardListNode(p._deck));
 		newp.appendChild(document.createElement("br"));
 		newp.appendChild(document.createTextNode("In hand:" + " ?".repeat(p._hand.length)));
 		newp.appendChild(document.createElement("br"));
@@ -272,6 +294,24 @@ let flag = null;
 //save something of the sort {type:choiceType, choiceFunc: a function that handles the next}
 //choiceFunc works as such: choiceFunc(current_flag, choice) = next_flag
 //this setup needs to be reviewed later.
+
+let knowncards = {};
+function cardInfoNode(c) {
+	if (!(c in knowncards)) pollCard(c);
+	let node = document.createElement("button");
+	node.innerHTML = "?";
+	node.style.paddingLeft = "1ex";
+	node.style.paddingRight = "1ex";
+	node.style.marginLeft = "0.5ex";
+	node.style.marginRight = "1ex";
+	node.onclick = () => setCardHighlight(c);
+	return node;
+}
+
+function setCardHighlight(c) {
+	let hn = document.getElementById("highlight");
+	hn.innerHTML = JSON.stringify(knowncards[c]);
+}
 
 function refreshFlag(cl) {
 	if (cl.length == 0) {flag = null; return;}
@@ -393,6 +433,8 @@ function nextPlayer() {
 <h1>Hello world.</h1>
 
 <div id="scoreboard"></div>
+
+<div id="highlight"></div>
 
 <br>
 
