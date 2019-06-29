@@ -74,7 +74,7 @@ function poll() {
     return ajax('/send/', makeAction(pollAction()), d => renderStateData(d.responseText));
 }
 function pollCard(c) {
-    return ajax('/send/', makeAction(pollCardAction(c)), d => knowncards[c] = JSON.parse(d.responseText));
+    return ajax('/send/', makeAction(pollCardAction(c)), d => knowncards[c] = JSON.parse(d.responseText).contents);
 }
 
 let previousStateString = null;
@@ -310,7 +310,44 @@ function cardInfoNode(c) {
 
 function setCardHighlight(c) {
 	let hn = document.getElementById("highlight");
-	hn.innerHTML = JSON.stringify(knowncards[c]);
+	clearNode(hn);
+	let [name, efflist, cost, reaction, treasure, score] = knowncards[c];
+	let t = document.createElement("h4");
+	t.innerHTML = `${name}${treasure ? " - Treasure" : ""}${reaction ? " - Reaction (Immune to attacks as long as this is in your hand)" : ""}`
+	hn.appendChild(t);
+	for (let e of efflist) {
+		hn.appendChild(document.createTextNode(showEffect(e)));
+		hn.appendChild(document.createElement("br"));
+	}
+	hn.appendChild(document.createElement("br"));
+	hn.appendChild(document.createTextNode(`Cost: ${cost}`));
+	if (score != 0) {
+		hn.appendChild(document.createElement("br"));
+		hn.appendChild(document.createTextNode(`Worth ${score} victory point${score==1?"":"s"}`));
+	}
+}
+
+function showEffect(e) {
+	switch (e.tag) {
+	case "Action": return "Action card";
+	case "Money": return `+${e.contents} money`;
+	case "Actions": return `+${e.contents} actions`;
+	case "Purchases": return `+${e.contents} purchases`;
+	case "Draw": return `Draw ${e.contents} card${e.contents==1?"":"s"}`;
+	case "PlayerChoice": case "OtherPlayerChoice": return cfTooltip(e.contents);
+	default: return JSON.stringify(e);
+	}
+}
+
+function cfTooltip(cf) {
+	switch (cf) {
+	case "CFRemodel": return "Trash a card from your hand; buy a card worth at most its cost +2";
+	case "CFCellar": return "Discard any number of cards from your hand; draw an equal number of cards";
+	case "CFWorkshop": return "Buy a card worth at most 4";
+	case "CFMilitia": return "All other players: Discard cards until you have at most 3 in your hand";
+	case "CFMine": return "Trash a treasure card from your hand; buy a treasure card worth at most its cost +3";
+	default: return cf;
+	}
 }
 
 function refreshFlag(cl) {

@@ -43,8 +43,6 @@ data Choice = CRemodel Int Int --Card to discard, card to purchase
 instance ToJSON Choice
 instance FromJSON Choice
 
-type CardData = ([Effect], Int, Bool, Bool, Int)
-
 effects :: Card -> [Effect]
 effects Copper = [Money 1]
 effects Silver = [Money 2]
@@ -95,5 +93,7 @@ score Dutchy = 3
 score Province = 6
 score _ = 0
 
+
+type CardData = (String, [Effect], Int, Bool, Bool, Int)
 cardData :: Card -> CardData --tells you all the info about the card
-cardData c = (effects c, cost c, reaction c, treasure c, score c)
+cardData c = (show c, effects c, cost c, reaction c, treasure c, score c)
