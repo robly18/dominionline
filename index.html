@@ -201,12 +201,9 @@ function renderTable(table) {
 	let tablearr = [];
 	let row = [];
 	for (let [i, [c,a]] of table.entries()) {
-		if (knowncards[c] == null) {
-			incompleteData = true;
-			if (!(c in knowncards)) pollCard(c);
-			continue;
-		}
-		row.push([c, a, knowncards[c][2], i]);
+		let data = fetchCardData(c);
+		if (data == null) continue;
+		row.push([c, a, data[2], i]);
 		if (row.length == colno) {
 			tablearr.push(row);
 			row = [];
@@ -320,6 +317,16 @@ let flag = null;
 let incompleteData = false; //this flag indicates that, when rendering, something failed and must be rerendered;
 
 let knowncards = {};
+function fetchCardData(c) { //if the card is unknown, return null, flag incomplete data as true, and request data. otherwise, return card data
+	let data = knowncards[c];
+	if (data == null) {
+		if (!(c in knowncards)) {
+			pollCard(c);
+		}
+		incompleteData = true;
+		return null;
+	} else return data;
+}
 function cardInfoNode(c) {
 	if (!(c in knowncards)) pollCard(c);
 	let node = document.createElement("button");
