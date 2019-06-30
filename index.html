@@ -74,19 +74,19 @@ function poll() {
     return ajax('/send/', makeAction(pollAction()), d => renderStateData(d.responseText));
 }
 function pollCard(c) {
+	knowncards[c] = null;
     return ajax('/send/', makeAction(pollCardAction(c)), d => knowncards[c] = JSON.parse(d.responseText).contents);
 }
 
 let previousStateString = null;
 function renderStateData(data, force_render) {
-	console.log(data);
-	if (data == previousStateString && !force_render)
+	if (data == previousStateString && !force_render && !incompleteData)
 		return;
+	incompleteData = false;
 	previousStateString = data;
 	let state = JSON.parse(data).contents;
 	let substate = state.tag == "EndState" ? state.contents[0] : state.contents;
 	document.getElementById("state").innerHTML = JSON.stringify(state);
-	console.log(state);
 	switch (state.tag) {
 	case "GameState":
 	case "EndState":
@@ -129,7 +129,6 @@ function renderEnd(state) {
 
 let previousLogString = null;
 function renderLogData(data) {
-	console.log(data);
 	if (data.responseText == previousLogString)
 		return;
 	previousLogString = data.responseText;
@@ -196,24 +195,48 @@ renderDeck = d => renderCardSet("deck", d);
 function renderTable(table) {
 	let h = document.getElementById("table");
 	clearNode(h);
-	for (let [i, c] of table.entries()) {
-		let cb = document.createElement("button");
-		cb.innerHTML = c[0] + " (Amt:" + c[1] + ")";
-		cb.onclick = ()=>sendAction(buyCardAction(i));
-		h.appendChild(cb);
-		h.appendChild(cardInfoNode(c[0]));
-		if (flag && flag.type == "tableCard") {
-			let pc = document.createElement("button");
-			pc.innerHTML = "X";
-			pc.onclick = function() {
-				flag = flag.choiceFunc(flag, i);
-				this.style.visibility = "hidden";
-				renderStateData(previousStateString, true);
-			}
-			h.appendChild(pc);
+	let cardno = table.length;
+	let colno = 3;
+	let rowno = Math.ceil(cardno/colno);
+	let tablearr = [];
+	let row = [];
+	for (let [i, [c,a]] of table.entries()) {
+		if (knowncards[c] == null) {
+			incompleteData = true;
+			if (!(c in knowncards)) pollCard(c);
+			continue;
 		}
-		h.appendChild(document.createElement("br"));
+		row.push([c, a, knowncards[c][2], i]);
+		if (row.length == colno) {
+			tablearr.push(row);
+			row = [];
+		}
 	}
+	let tableelem = document.createElement("table");
+	for (let r of tablearr) {
+		let rowelem = document.createElement("tr");
+		for (let [c, a, cost, i] of r) {
+			let elem = document.createElement("td");
+			let cb = document.createElement("button");
+			cb.innerHTML = `${c} (Amt: ${a}, Cost: ${cost})`;
+			cb.onclick = ()=>sendAction(buyCardAction(i));
+			elem.appendChild(cb);
+			elem.appendChild(cardInfoNode(c));
+			if (flag && flag.type == "tableCard") {
+				let pc = document.createElement("button");
+				pc.innerHTML = "X";
+				pc.onclick = function() {
+					flag = flag.choiceFunc(flag, i);
+					this.style.visibility = "hidden";
+					renderStateData(previousStateString, true);
+				}
+				elem.appendChild(pc);
+			}
+			rowelem.appendChild(elem);
+		}
+		tableelem.appendChild(rowelem);
+	}
+	h.appendChild(tableelem);
 }
 
 function renderPlayerData(plr, nowPlaying) {
@@ -294,6 +317,7 @@ let flag = null;
 //save something of the sort {type:choiceType, choiceFunc: a function that handles the next}
 //choiceFunc works as such: choiceFunc(current_flag, choice) = next_flag
 //this setup needs to be reviewed later.
+let incompleteData = false; //this flag indicates that, when rendering, something failed and must be rerendered;
 
 let knowncards = {};
 function cardInfoNode(c) {
