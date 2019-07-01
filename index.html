@@ -24,6 +24,11 @@
 .tooltip:hover .tooltiptext {
   visibility: visible;
 }
+
+.cardButton {
+    height: 4ex;
+    width: 80%;
+}
 </style>
 
 <script>
@@ -185,6 +190,7 @@ function renderHand(cardSet) {
 		let cb = document.createElement("button");
 		cb.innerHTML = c;
 		cb.onclick = ()=>sendAction(playCardAction(i));
+        cb.className = "cardButton";
 		h.appendChild(cb);
 		h.appendChild(cardInfoNode(c));
 		if (flag && flag.type == "ownCard") {
@@ -208,6 +214,7 @@ function renderCardSet(elementid, cardSet) {
 	for (let [i, c] of cardSet.entries()) {
 		let cb = document.createElement("button");
 		cb.innerHTML = c;
+        cb.className = "cardButton";
 		h.appendChild(cb);
 		h.appendChild(cardInfoNode(c));
 		h.appendChild(document.createElement("br"));
@@ -240,11 +247,17 @@ function renderTable(table) {
 		let rowelem = document.createElement("tr");
 		for (let [c, a, cost, i] of r) {
 			let elem = document.createElement("td");
+            elem.style.width = "15%";
 			let cb = document.createElement("button");
 			cb.innerHTML = `${c} (Amt: ${a}, Cost: ${cost})`;
 			cb.onclick = ()=>sendAction(buyCardAction(i));
+            cb.style.width = "80%";
+            cb.style.height = "4ex";
 			elem.appendChild(cb);
-			elem.appendChild(cardInfoNode(c));
+            let ci = cardInfoNode(c);
+            ci.style.width = "10%"
+            ci.style.height = "4ex";
+			elem.appendChild(ci);
 			if (flag && flag.type == "tableCard") {
 				let pc = document.createElement("button");
 				pc.innerHTML = "X";
@@ -526,6 +539,7 @@ function nextPlayer() {
 	margin:2ex;
 	display:inline-block;
 	vertical-align:top;
+    width: 20%;
 }
 </style>
 </head>
