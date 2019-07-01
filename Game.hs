@@ -96,7 +96,7 @@ act s (p, Poll) = return (s, RPoll $ scrambleState p s)
 act s (_, PollCard c) = return (s, RCardData $ cardData c)
 
 act (JoiningState plrs) (plr, StartGame) = liftM ((,RNull) . GameState) $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
-    (map (,10) [Copper, Silver, Gold, Estate, Dutchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine])
+    (map (,10) [Copper, Silver, Gold, Estate, Duchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine])
 
 act s (plr, Say x) = do tell [show plr ++ ": " ++ x]
                         return (s, RNull)

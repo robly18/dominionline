@@ -9,7 +9,7 @@ import Data.Aeson
 import GHC.Generics
 
 data Card = Copper | Silver | Gold
-          | Estate | Dutchy | Province
+          | Estate | Duchy | Province
           | Village | Forge | Lumberjack | Market
           | Remodel | Cellar | Workshop | Moat | Militia | Mine
     deriving (Generic, Show, Eq, Ord)
@@ -64,7 +64,7 @@ cost Copper = 0
 cost Silver = 3
 cost Gold = 6
 cost Estate = 2
-cost Dutchy = 5
+cost Duchy = 5
 cost Province = 8
 cost Forge = 4
 cost Village = 3
@@ -89,7 +89,7 @@ treasure _ = False
 
 score :: Card -> Int --this isnt general enough to deal with gardens. perhaps fold this into effects eventually?
 score Estate = 1
-score Dutchy = 3
+score Duchy = 3
 score Province = 6
 score _ = 0
 
