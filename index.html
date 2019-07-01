@@ -234,6 +234,7 @@ function renderTable(table) {
 			row = [];
 		}
 	}
+    if (row.length != 0) tablearr.push(row);
 	let tableelem = document.createElement("table");
 	for (let r of tablearr) {
 		let rowelem = document.createElement("tr");
