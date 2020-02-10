@@ -132,7 +132,7 @@ playCard s i = let player = s ^. players ^. focus
                         Just (newhand, card) -> do let newplayer = player & hand .~ newhand & played .~ card : player ^. played
                                                    newstate <- actOnCard card (s & (players . focus) .~ newplayer)
                                                    case newstate of Nothing -> return s
-                                                                    Just ns -> return ns
+                                                                    Just ns -> (tell $ return $ PlayedCardEvent card) >> return ns
 
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = actOnEffects (effects c)
@@ -184,7 +184,8 @@ buyCard s i = fromMaybe (return s)
                     if amt == 0 then Nothing
                     else if plr ^. purchases == 0 then Nothing
                     else if plr ^. money < cost c then Nothing
-                    else return $ (return $ s & (players . focus) %~ (over money (subtract $ cost c) . over purchases (subtract 1) . over played (c:))
+                    else return $ do tell $ return $ PlayerAction (plr ^. playerno) $ Buy i
+                                     (return $ s & (players . focus) %~ (over money (subtract $ cost c) . over purchases (subtract 1) . over played (c:))
                                                  & (table . element i . _2) %~ (subtract 1)))
 
 joinGame :: State -> Writer GameLog (Maybe Int, State)

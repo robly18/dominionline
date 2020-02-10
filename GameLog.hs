@@ -25,6 +25,7 @@ instance FromJSON Action
 data Event = PlayerAction Int Action
            | DrawEvent Int
            | JoinEvent Int
+           | PlayedCardEvent Card
     deriving (Generic, Show)
 instance ToJSON Event
 
