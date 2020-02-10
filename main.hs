@@ -3,6 +3,7 @@ import Network.Wai
 import Network.HTTP.Types
 import Network.HTTP.Types.Status
 import Network.Wai.Handler.Warp (run)
+import Network.Wai.Middleware.Static
 import Data.IORef
 import Data.Monoid
 import qualified Data.ByteString.Char8 as B8
@@ -69,4 +70,4 @@ main = do
     putStrLn $ "http://localhost:8080/"
     gen <- getStdGen
     counter <- newIORef $ (return newGame, gen)
-    run 8080 (app counter)
+    run 8080 $ static (app counter)
