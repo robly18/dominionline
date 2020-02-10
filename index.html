@@ -108,6 +108,11 @@ function pollCard(c) {
     return ajax('/send/', makeAction(pollCardAction(c)), d => knowncards[c] = JSON.parse(d.responseText).contents);
 }
 
+let currentState = {players:[]};
+let renderState = null;
+let lastRenderedAction = 0;
+let toRender = [];
+
 let previousStateString = null;
 function renderStateData(data, force_render) {
 	if (data == previousStateString && !force_render && !incompleteData)
@@ -163,7 +168,73 @@ function renderLogData(data) {
 		return;
 	previousLogString = data.responseText;
 	let log = JSON.parse(data.responseText);
-	renderLog(log);
+	renderChanges(log.slice(lastRenderedAction));
+	lastRenderedAction = log.length;
+}
+
+function renderChanges(changes) {
+	console.log("Adding changes:");
+	console.log(changes);
+	toRender = toRender.concat(changes);
+	console.log(toRender);
+}
+
+function render() {
+	if (renderState == null) {
+		if (toRender.length == 0)
+			return;
+		renderState = makeRenderState(toRender.shift());
+	}
+	console.log(renderState);
+	if (renderState != null)
+		renderState = renderState();
+}
+
+function makeRenderState(event) {
+	console.log("Making renderState:")
+	console.log(event);
+	switch (event.tag) {
+	case "PlayerAction":
+		switch (event.contents[1].tag) {
+		case "Say":
+			return null;
+			break;
+		case "StartGame":
+			return makeStartRender(event.contents[0], 0);
+			break;
+		}
+		break;
+	case "JoinEvent":
+		return makeJoinRender(event.contents, 0);
+		break;
+	}
+}
+
+function makeJoinRender(plr, t) {
+	function makePlayer(p) {
+		return {id:p, deck:0, hand:0, played:0, discard:0};
+	}
+	return function() {
+		if (t == 0) {
+			currentState.players.push(makePlayer(plr));
+		}
+		document.getElementById("title").innerHTML = "Adding player " + plr + " (t = "+t+")";
+		if (t < 10) {
+			return makeJoinRender(plr, t+1);
+		} else return null;
+	}
+}
+
+function makeStartRender(plr, t) {
+	return function() {
+		if (t == 0) {
+			currentState.playing = plr;
+		}
+		document.getElementById("title").innerHTML = "start render " + t;
+		if (t < 10)
+			return makeStartRender(plr, t+1);
+		else return null;
+	}
 }
 
 function renderLog(log) {
@@ -544,7 +615,7 @@ function nextPlayer() {
 </style>
 </head>
 <body>
-<h1>Hello world.</h1>
+<h1 id="title">Hello world.</h1>
 
 <div id="scoreboard"></div>
 
@@ -640,6 +711,8 @@ style="height:5em; border-style:solid; overflow:auto;"
 document.getElementById("text").onkeypress = function(k){if (k.keyCode==13) sendText();};
 
 window.setInterval(function(){ajax('/log/', null, renderLogData)}, 1000);
-window.setInterval(function(){poll()}, 1000)</script>
+window.setInterval(render, 100);
+//window.setInterval(function(){poll()}, 1000)
+</script>
 </body>
 </html>
