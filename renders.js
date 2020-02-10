@@ -1,7 +1,7 @@
 
 function makeJoinRender(plr, t) {
 	function makePlayer(p) {
-		return {id:p, deck:0, hand:0, played:0, discard:0};
+		return {id:p, deck:10, hand:0, played:0, discard:0};
 	}
 	return function() {
 		if (t == 0) {
@@ -23,6 +23,7 @@ function makeStartRender(plr, t) {
 			renderp = currentState.players[t];
 			addPlayerDisplay(renderp);
 			updatePlayerDisplay(renderp, plr);
+			updatePlayerCardDisplay(renderp);
 		}
 		document.getElementById("title").innerHTML = "start render " + t;
 		if (t < 10 + currentState.players.length)
@@ -37,9 +38,15 @@ function addPlayerDisplay(plrdata) {
 	let display = {
 		player : plrdata,
 		div : document.createElement("div"),
-		datap : document.createElement("p")
+		namep : document.createElement("p"),
+		datap : document.createElement("p"),
+		handp : document.createElement("p"),
+		cardp : document.createElement("p")
 	}
+	display.div.appendChild(display.namep);
 	display.div.appendChild(display.datap);
+	display.div.appendChild(display.handp);
+	display.div.appendChild(display.cardp);
 
 	let dp = document.getElementById("playerdata");
 	dp.appendChild(display.div);
@@ -47,8 +54,30 @@ function addPlayerDisplay(plrdata) {
 	playerdisplays[plrdata.id] = display;
 }
 
-function updatePlayerDisplay(plrdata, playingno) { //updates only money, actions and purchases!
+function updatePlayerDisplay(plrdata, playingno) { //updates only who's playing, money, actions and purchases!
 	let display = playerdisplays[plrdata.id];
 
-	display.datap.innerHTML = `Is it my turn? ${plrdata.id == playingno}`;
+	display.namep.innerHTML = playingno == plrdata.id ? `>>Player ${plrdata.id}<< (Now playing)` : `Player ${plrdata.id}`;
+}
+function updatePlayerCardDisplay(plrdata) {
+	let display = playerdisplays[plrdata.id];
+	display.cardp.innerHTML = `Discard: ${"|".repeat(plrdata.played)} ${"|".repeat(plrdata.discard)}; Deck: ${"|".repeat(plrdata.deck)}`;
+	display.handp.innerHTML = `Hand: ${"|".repeat(plrdata.hand)}`; 
+}
+
+
+function makeDrawRender(plr, t) {
+	return function() {
+		let renderp = currentState.players[plr];
+		renderp.hand++;
+		if (renderp.deck > 0) {
+			renderp.deck--;
+		} else {
+			renderp.deck = renderp.discard - 1; //this is a bug. but it probably won't happen.
+			renderp.discard = 0;
+		}
+
+		updatePlayerCardDisplay(renderp);
+		return null;
+	}
 }

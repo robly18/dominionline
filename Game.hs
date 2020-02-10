@@ -54,7 +54,7 @@ actOnEffects (e:es) s = do mns <- actOnEffect e s
 
 draw :: Player -> RL Player
 draw p = case p ^. deck of
-            (c:cs) -> return ((over hand (c:) . set deck cs) p)
+            (c:cs) -> (tell $ return $ DrawEvent $ p ^. playerno) >> return ((over hand (c:) . set deck cs) p)
             [] -> case p ^. discarded of
                     [] -> return p
                     _ -> (shuffleDiscarded p) >>= draw
