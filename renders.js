@@ -81,3 +81,25 @@ function makeDrawRender(plr, t) {
 		return null;
 	}
 }
+
+function makePlayedCardRender(card) {
+	function cardDisplay(name) { //temporary
+		let node = document.createElement("p");
+		node.innerHTML = card;
+		return node;
+	}
+
+	return function() {
+		let renderp = currentState.players[currentState.playing];
+		renderp.hand--;
+		updatePlayerCardDisplay(renderp);
+		
+		document.getElementById("playedcards").appendChild(cardDisplay(card));
+
+		return null;
+	}
+}
+
+function makeBuyCardRender(plr, bought) {
+
+}

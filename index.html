@@ -136,6 +136,9 @@ function makeRenderState(event) {
 	case "JoinEvent":
 		return makeJoinRender(event.contents, 0);
 		break;
+	case "PlayedCardEvent":
+		return makePlayedCardRender(event.contents, 0);
+		break;
 	}
 //todo: handle playcardevent and buyevent
 }
@@ -597,6 +600,8 @@ onclick="flag = flag.shortCircuit(flag); renderStateData(previousStateString, tr
 	<div id="playerdata" class="hud">
 	</div>
 </div>
+
+<div id="playedcards"></div>
 
 <div id="table"></div>
 
