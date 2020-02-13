@@ -18,6 +18,7 @@ function makeStartRender(plr, t) {
 	return function() {
 		if (t == 0) {
 			currentState.playing = plr;
+			for (let i = 0; i != 10; i++) currentState.store.push(10); //temp
 		}
 		if (t < currentState.players.length) {
 			renderp = currentState.players[t];
@@ -61,7 +62,7 @@ function updatePlayerDisplay(plrdata, playingno) { //updates only who's playing,
 }
 function updatePlayerCardDisplay(plrdata) {
 	let display = playerdisplays[plrdata.id];
-	display.cardp.innerHTML = `Discard: ${"|".repeat(plrdata.played)} ${"|".repeat(plrdata.discard)}; Deck: ${"|".repeat(plrdata.deck)}`;
+	display.cardp.innerHTML = `Discard: 	${"|".repeat(plrdata.discard)}; Deck: ${"|".repeat(plrdata.deck)}`;
 	display.handp.innerHTML = `Hand: ${"|".repeat(plrdata.hand)}`; 
 }
 
@@ -85,21 +86,44 @@ function makeDrawRender(plr, t) {
 function makePlayedCardRender(card) {
 	function cardDisplay(name) { //temporary
 		let node = document.createElement("p");
-		node.innerHTML = card;
+		node.innerHTML = name;
 		return node;
 	}
 
 	return function() {
 		let renderp = currentState.players[currentState.playing];
 		renderp.hand--;
+		renderp.played++;
 		updatePlayerCardDisplay(renderp);
 		
-		document.getElementById("playedcards").appendChild(cardDisplay(card));
+		document.getElementById("playedcards").prepend(cardDisplay(card));
+	
+		return null;
+	}
+}
+
+function makeBuyCardRender(plr, bought, t) {
+	function cardBuyDisplay(name) { //temporary
+		let node = document.createElement("p");
+		node.innerHTML = `Bought ${name}`;
+		return node;
+	}
+
+	return function() {
+		let renderp = currentState.players[currentState.playing]
+		currentState.store[bought]--;
+		renderp.played++;
+		document.getElementById("playedcards").prepend(cardBuyDisplay(bought));
 
 		return null;
 	}
 }
 
-function makeBuyCardRender(plr, bought) {
+function makeEndTurnEvent(t) {
+	return function() {
+		document.getElementById("title").innerHTML = "End turn! (t = "+t+")";
+		if (t == 0) {
 
+		}
+	}
 }

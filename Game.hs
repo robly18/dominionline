@@ -112,7 +112,8 @@ checkGameEnd s = if (length $ filter ((==0) . snd) (s ^. table)) < 3 then GameSt
                     EndState s (foldl (\l p -> (p ^. playerno, sum $ map score $ p ^. hand ++ p ^.deck ++ p ^. discarded ++ p ^. played):l) [] (s ^. players))
 
 endTurn :: GameState -> RL GameState --todo dont allow a player with pending choices to end turn
-endTurn s = do  news <- (players . focus) (discardDraw . set actions 1 . set purchases 1 . set money 0) s
+endTurn s = do  tell $ return $ EndTurnEvent
+                news <- (players . focus) (discardDraw . set actions 1 . set purchases 1 . set money 0) s
                 let newnews = news & players %~ next
                 return newnews
                                        
