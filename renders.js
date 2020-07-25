@@ -4,13 +4,8 @@ function makeJoinRender(plr, t) {
 		return {id:p, deck:10, hand:0, played:0, discard:0};
 	}
 	return function() {
-		if (t == 0) {
-			currentState.players.push(makePlayer(plr));
-		}
-		document.getElementById("title").innerHTML = "Adding player " + plr + " (t = "+t+")";
-		if (t < 10)
-			return makeJoinRender(plr, t+1);
-		else return null;
+		currentState.players.push(makePlayer(plr));
+		return null;
 	}
 }
 
@@ -66,8 +61,25 @@ function updatePlayerCardDisplay(plrdata) {
 	display.handp.innerHTML = `Hand: ${"|".repeat(plrdata.hand)}`; 
 }
 
+let hudState = {hand : [], played : [], discard : 0, deck : 10};
 
-function makeDrawRender(plr, t) {
+function updateHudDisplay(state) {
+	let hdiv = document.getElementById("hand");
+	let ddiv = document.getElementById("discard");
+	let pdiv = document.getElementById("played");
+	let deck = document.getElementById("deck");
+
+	hdiv.innerHTML = "";
+	for (let [i, c] of state.hand.entries()) {
+		hdiv.appendChild(makeCardNode(c, function(){sendAction(playCardAction(i))}));
+		hdiv.appendChild(document.createElement("br"));
+	}
+	ddiv.innerHTML = "|".repeat(state.discard);
+	pdiv.innerHTML = state.played;
+	deck.innerHTML = "|".repeat(state.deck);
+}
+
+function makeDrawRender(plr, t, card) {
 	return function() {
 		let renderp = currentState.players[plr];
 		renderp.hand++;
@@ -75,15 +87,27 @@ function makeDrawRender(plr, t) {
 			renderp.deck--;
 		} else {
 			renderp.deck = renderp.discard - 1; //this is a bug. but it probably won't happen.
+												// dear past me: what?? do you mean, like, if there are no cards in the discard pile?
 			renderp.discard = 0;
 		}
-
 		updatePlayerCardDisplay(renderp);
+		if (plr == playerno) {
+			hudState.hand.push(card);
+			if (hudState.deck > 0) {
+				hudState.deck--;
+			} else {
+				hudState.deck = hudState.discard - 1; //this is a bug. but it probably won't happen.
+													// dear past me: what?? do you mean, like, if there are no cards in the discard pile?
+				hudState.discard = 0;
+			}
+			updateHudDisplay(hudState);
+		}
+
 		return null;
 	}
 }
 
-function makePlayedCardRender(card) {
+function makePlayedCardRender(plr, card, t) {
 	function cardDisplay(name) { //temporary
 		let node = document.createElement("p");
 		node.innerHTML = name;
@@ -95,6 +119,13 @@ function makePlayedCardRender(card) {
 		renderp.hand--;
 		renderp.played++;
 		updatePlayerCardDisplay(renderp);
+
+	
+		if (plr == playerno) {
+			hudState.played = hudState.played.concat(hudState.hand.splice(hudState.hand.indexOf(card), 1));
+			
+			updateHudDisplay(hudState);
+		}
 		
 		document.getElementById("playedcards").prepend(cardDisplay(card));
 	
@@ -119,11 +150,25 @@ function makeBuyCardRender(plr, bought, t) {
 	}
 }
 
-function makeEndTurnEvent(t) {
+function makeEndTurnEvent(plr, t) {
 	return function() {
-		document.getElementById("title").innerHTML = "End turn! (t = "+t+")";
-		if (t == 0) {
+		let renderp = currentState.players[plr];
+		renderp.discard += renderp.hand + renderp.played;
+		renderp.hand = 0;
+		renderp.played = 0;
+		updatePlayerCardDisplay(renderp);
 
+		document.getElementById("playedcards").innerHTML = "";
+
+		if (plr == playerno) {
+			hudState.discard += hudState.hand.length + hudState.played.length;
+			hudState.hand = [];
+			hudState.played = [];
+			updateHudDisplay(hudState);
 		}
+
+		return null;
+		
+		
 	}
 }

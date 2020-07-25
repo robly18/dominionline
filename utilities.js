@@ -65,7 +65,7 @@ function ajax(url, data, callback) {
 }
 
 function sendAction(a) {
-    return ajax('/send/', makeAction(a), poll);
+    return ajax('/send/', makeAction(a), render);
 }
 function poll() {
     return ajax('/send/', makeAction(pollAction()), d => renderStateData(d.responseText));

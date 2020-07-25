@@ -54,7 +54,7 @@ actOnEffects (e:es) s = do mns <- actOnEffect e s
 
 draw :: Player -> RL Player
 draw p = case p ^. deck of
-            (c:cs) -> (tell $ return $ DrawEvent $ p ^. playerno) >> return ((over hand (c:) . set deck cs) p)
+            (c:cs) -> (tell $ return $ DrawEvent (p ^. playerno) c) >> return ((over hand (++[c]) . set deck cs) p)
             [] -> case p ^. discarded of
                     [] -> return p
                     _ -> (shuffleDiscarded p) >>= draw
@@ -112,7 +112,7 @@ checkGameEnd s = if (length $ filter ((==0) . snd) (s ^. table)) < 3 then GameSt
                     EndState s (foldl (\l p -> (p ^. playerno, sum $ map score $ p ^. hand ++ p ^.deck ++ p ^. discarded ++ p ^. played):l) [] (s ^. players))
 
 endTurn :: GameState -> RL GameState --todo dont allow a player with pending choices to end turn
-endTurn s = do  tell $ return $ EndTurnEvent
+endTurn s = do  tell $ return $ PlayerAction (index $ s ^. players) EndTurn
                 news <- (players . focus) (discardDraw . set actions 1 . set purchases 1 . set money 0) s
                 let newnews = news & players %~ next
                 return newnews
@@ -133,7 +133,7 @@ playCard s i = let player = s ^. players ^. focus
                         Just (newhand, card) -> do let newplayer = player & hand .~ newhand & played .~ card : player ^. played
                                                    newstate <- actOnCard card (s & (players . focus) .~ newplayer)
                                                    case newstate of Nothing -> return s
-                                                                    Just ns -> (tell $ return $ PlayedCardEvent card) >> return ns
+                                                                    Just ns -> (tell $ return $ PlayedCardEvent (index $ s ^. players) card) >> return ns
 
 actOnCard :: Card -> GameState -> RL (Maybe GameState)
 actOnCard c = actOnEffects (effects c)
