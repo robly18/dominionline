@@ -29,96 +29,22 @@
     height: 4ex;
     width: 80%;
 }
+.cardChoiceButton {
+    height: 4ex;
+    width: 80%;
+	background-color : pink;
+}
 </style>
 
 <script src="utilities.js"></script>
 <script src="cardnode.js"></script>
 <script src="render.js"></script>
 <script src="renders.js"></script>
+<script src="choices.js"></script>
 <script>
 
 let playerno = -1*0;
 
-let flag = null;
-//when it needs to make a choice (or rather, a sequence of choices),
-//save something of the sort {type:choiceType, choiceFunc: a function that handles the next}
-//choiceFunc works as such: choiceFunc(current_flag, choice) = next_flag
-//this setup needs to be reviewed later.
-let incompleteData = false; //this flag indicates that, when rendering, something failed and must be rerendered;
-
-
-function refreshFlag(cl) {
-	if (cl.length == 0) {flag = null; return;}
-	if (flag == null) {
-		let c0 = cl[0];
-		switch (c0) {
-		case "CFRemodel": flag = makeRemodelFlag(); break;
-		case "CFCellar": flag = makeCellarFlag(); break;
-		case "CFWorkshop": flag = makeWorkshopFlag(); break;
-		case "CFMilitia": flag = makeMilitiaFlag(); break;
-		case "CFMine": flag = makeMineFlag(); break;
-		}
-	}
-}
-
-function makeRemodelFlag() {
-	return { type : "ownCard",
-			 choiceFunc : function(f, i) {
-		return { type : "tableCard",
-				 choiceFunc : function(f, j) {
-					sendAction(choiceAction(cremodel(i, j)));
-					return null;
-				}
-				}
-			}
-			}
-}
-function makeCellarFlag() {
-	return { type : "ownCard",
-			 _cards : [],
-			 shortCircuit : function(f) {
-				sendAction(choiceAction(ccellar(f._cards)));
-				return null;
-			 },
-			 choiceFunc : function(f, i) {
-				f._cards.push(i);
-				return f;
-			}
-			}
-}
-function makeWorkshopFlag() {
-	return { type : "tableCard",
-			 choiceFunc : function(f, i) {
-				sendAction(choiceAction(cworkshop(i)));
-				return null;
-			}
-			}
-}
-function makeMilitiaFlag() {
-	return { type : "ownCard",
-			 _cards : [],
-			 shortCircuit : function(f) {
-				sendAction(choiceAction(cmilitia(f._cards)));
-				return null;
-			 },
-			 choiceFunc : function(f, i) {
-				f._cards.push(i);
-				return f;
-			}
-			}
-}
-function makeMineFlag() {
-	return { type : "ownCard",
-			 choiceFunc : function(f, i) {
-		return { type : "tableCard",
-				 choiceFunc : function(f, j) {
-					sendAction(choiceAction(cmine(i, j)));
-					return null;
-				}
-				}
-			}
-			}
-}
 
 
 function getPlayer(data) {

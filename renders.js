@@ -91,9 +91,11 @@ function updatePlayerCardDisplay(plrdata) {
 	display.handp.innerHTML = `Hand: ${"|".repeat(plrdata.hand)}`; 
 }
 
-let hudState = {hand : [], played : [], discard : 0, deck : 10};
+let hudState = {hand : [], played : [], discard : 0, deck : 10,
+				choice : false}; //this flag affects rendering by making buttons look and act different to choose a card instead of playing it
 
 function updateHudDisplay(state) {
+	console.log("Updating hud");
 	let hdiv = document.getElementById("hand");
 	let ddiv = document.getElementById("discard");
 	let pdiv = document.getElementById("played");
@@ -101,8 +103,14 @@ function updateHudDisplay(state) {
 
 	hdiv.innerHTML = "";
 	for (let [i, c] of state.hand.entries()) {
-		hdiv.appendChild(makeCardNode(c, function(){sendAction(playCardAction(i))}));
-		hdiv.appendChild(document.createElement("br"));
+		if (!state.choice) {
+			hdiv.appendChild(makeCardNode(c, function(){sendAction(playCardAction(i))}));
+			hdiv.appendChild(document.createElement("br"));
+		} else {
+			let clickFunction = function(){toRender.push({tag:"Custom", makeRender:makeClearHudChoiceRender}); flag = flag.choiceFunction(i)};
+			hdiv.appendChild(makeCardNode(c, clickFunction, "cardChoiceButton"));
+			hdiv.appendChild(document.createElement("br"));
+		}
 	}
 	ddiv.innerHTML = "|".repeat(state.discard);
 	pdiv.innerHTML = state.played;
@@ -165,23 +173,20 @@ function makePlayedCardRender(plr, card, t) {
 
 function makePlayedCardEffectRender(plr, effect) {
 	return function() {
-		return null; //deprecated function
 		let renderp = currentState.players[plr];
-		switch (effect.tag) {
+		switch (effect.tag) {//these things are blank because they're taken care of by the makeChangeRender
 		case "Action":
-			renderp.actions--;
 			break;
 		case "Money":
-			renderp.money += effect.contents;
 			break;
 		case "Purchases":
-			renderp.purchases += effect.contents;
 			break;
 		case "Actions":
-			renderp.actions += effect.contents;
+			break;
+		case "PlayerChoice":
+			if (plr == playerno) return renderChoice(effect.contents);
 			break;
 		}
-		updatePlayerDisplay(renderp, currentState.playing);
 	}
 }
 

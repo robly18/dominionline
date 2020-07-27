@@ -49,6 +49,8 @@ function makeRenderState(event) {
 		break;
 	case "PlayedCardEffect":
 		return makePlayedCardEffectRender(event.contents[0], event.contents[1]);
+	case "Custom":
+		return event.makeRender();
 	}
 }
 

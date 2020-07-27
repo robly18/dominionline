@@ -48,13 +48,13 @@ function cardHighlight(c) {
 	return hn;
 }
 
-function makeCardNode(name, callback) {
+function makeCardNode(name, callback, cssclass) {
 	let div = document.createElement("div");
 	let b = document.createElement("button");
 	
 	b.innerHTML = name;
 	b.onclick = callback;
-	b.className = "cardButton";
+	b.className = cssclass || "cardButton";
 	div.appendChild(b);
 	div.appendChild(cardInfoNode(name));
 
