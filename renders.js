@@ -77,9 +77,9 @@ function addPlayerDisplay(plrdata) {
 	playerdisplays[plrdata.id] = display;
 }
 
-function updatePlayerDisplay(plrdata, playingno) { //updates only who's playing, money, actions and purchases!
+function updatePlayerDisplay(plrdata) { //updates only who's playing, money, actions and purchases!
 	let display = playerdisplays[plrdata.id];
-	if (playingno != plrdata.id) {
+	if (currentState.playing != plrdata.id) {
 		display.namep.innerHTML = `Player ${plrdata.id}`;
 	} else {
 		display.namep.innerHTML = `>>Player ${plrdata.id}<< (Now playing)<br>Money: ${plrdata.money}, Actions: ${plrdata.actions}, Purchases: ${plrdata.purchases}.`;
@@ -165,6 +165,7 @@ function makePlayedCardRender(plr, card, t) {
 
 function makePlayedCardEffectRender(plr, effect) {
 	return function() {
+		return null; //deprecated function
 		let renderp = currentState.players[plr];
 		switch (effect.tag) {
 		case "Action":
@@ -197,9 +198,6 @@ function makeBuyCardRender(plr, bought, t) {
 		renderp.played++;
 		document.getElementById("playedcards").prepend(cardBuyDisplay(names[bought]));
 
-		renderp.money -= 1; //should be the card's corst
-		renderp.purchases--;
-
 		if (plr == playerno) {
 			hudState.played = hudState.played.concat(names[bought])
 			updateHudDisplay(hudState);
@@ -231,6 +229,28 @@ function makeEndTurnEvent(plr, t) {
 		updatePlayerDisplay(renderp, nextplr);
 		updatePlayerDisplay(currentState.players[nextplr], nextplr);
 
+		return null;
+	}
+}
+
+function makeChangeRender(plr, delta) {
+	return function() {
+		let renderp = currentState.players[plr];
+		switch (delta.tag) {
+		case "MoneyDelta":
+			renderp.money += delta.contents;
+			break;
+		case "ActionDelta":
+			renderp.actions += delta.contents;
+			break;
+		case "PurchasesDelta":
+			renderp.purchases += delta.contents;
+			break;
+		default:
+			console.log("Unknown change type "+delta);
+			break;
+		}
+		updatePlayerDisplay(renderp);
 		return null;
 	}
 }

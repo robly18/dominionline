@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module GameLog (Action(..), Event(..), GameLog) where
+module GameLog (Action(..), Event(..), DataDelta(..), GameLog) where
 
 import GHC.Generics
 import Data.Aeson
@@ -27,7 +27,14 @@ data Event = PlayerAction Int Action
            | JoinEvent Int
            | PlayedCardEvent Int Card
            | PlayedCardEffect Int Effect
+           | PlayerChangeEvent Int DataDelta
     deriving (Generic, Show)
 instance ToJSON Event
+
+data DataDelta = MoneyDelta Int
+               | ActionDelta Int
+               | PurchasesDelta Int
+    deriving (Generic, Show)
+instance ToJSON DataDelta
 
 type GameLog = Vector Event

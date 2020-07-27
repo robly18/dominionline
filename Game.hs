@@ -37,13 +37,20 @@ type RL = RandT StdGen (Writer GameLog)
 
 
 actOnEffect :: Effect -> GameState -> RL (Maybe GameState)
-actOnEffect (Money i) = return . return . over (players . focus . money) (+i)
-actOnEffect (Actions i) = return . return . over (players . focus . actions) (+i)
-actOnEffect (Purchases i) = return . return . over (players . focus . purchases) (+i)
-actOnEffect (Draw i) = liftM return . (players . focus) ((!!i) . (iterate (>>= draw)) . return)
-actOnEffect Action = \s -> if s ^. players ^. focus ^. actions > 0 then return $ return $ s & (players . focus . actions) %~ (subtract 1) else return Nothing
-actOnEffect (PlayerChoice c) = return . return . over (players . focus . pendingChoices) (++[c])
-actOnEffect (OtherPlayerChoice c) = \s -> return $ return $ s & (players . mapped) %~
+actOnEffect (Money i) s = do tell $ return $ PlayerChangeEvent (index $ s ^. players) $ MoneyDelta i
+                             return $ Just $ over (players . focus . money) (+i) s
+actOnEffect (Actions i) s = do tell $ return $ PlayerChangeEvent (index $ s ^. players) $ ActionDelta i
+                               return $ Just $ over (players . focus . actions) (+i) s
+actOnEffect (Purchases i) s = do tell $ return $ PlayerChangeEvent (index $ s ^. players) $ PurchasesDelta i
+                                 return $ Just $ over (players . focus . purchases) (+i) s
+actOnEffect (Draw i) s = do let player = s ^. players ^. focus
+                            newplayer <- (iterate (>>= draw) (return player)) !! i
+                            return $ return $ set (players. focus) newplayer s
+actOnEffect Action s = if s ^. players ^. focus ^. actions > 0 then do tell $ return $ PlayerChangeEvent (index $ s ^. players) $ ActionDelta (-1)
+                                                                       return $ return $ s & (players . focus . actions) %~ (subtract 1)
+                                                                else return Nothing
+actOnEffect (PlayerChoice c) s = return $ return $ over (players . focus . pendingChoices) (++[c]) s
+actOnEffect (OtherPlayerChoice c) s = return $ return $ s & (players . mapped) %~
                 (\p -> if p ^. playerno == index (s ^. players) || any reaction (p ^. hand) then p else p & pendingChoices %~ (++[c]))
 
 actOnEffects :: [Effect] -> GameState -> RL (Maybe GameState)
@@ -187,6 +194,8 @@ buyCard s i = fromMaybe (return s)
                     else if plr ^. purchases == 0 then Nothing
                     else if plr ^. money < cost c then Nothing
                     else return $ do tell $ return $ PlayerAction (plr ^. playerno) $ Buy i
+                                     tell $ return $ PlayerChangeEvent (plr ^. playerno) $ MoneyDelta (-(cost c))
+                                     tell $ return $ PlayerChangeEvent (plr ^. playerno) $ PurchasesDelta (-1)
                                      (return $ s & (players . focus) %~ (over money (subtract $ cost c) . over purchases (subtract 1) . over played (c:))
                                                  & (table . element i . _2) %~ (subtract 1)))
 

@@ -35,6 +35,9 @@ function makeRenderState(event) {
 			break;
 		}
 		break;
+	case "PlayerChangeEvent":
+		return makeChangeRender(event.contents[0], event.contents[1]);
+		break;
 	case "DrawEvent":
 		return makeDrawRender(event.contents[0], 0, event.contents[1]);
 		break;
