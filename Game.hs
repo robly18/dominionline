@@ -48,7 +48,8 @@ actOnEffect (OtherPlayerChoice c) = \s -> return $ return $ s & (players . mappe
 
 actOnEffects :: [Effect] -> GameState -> RL (Maybe GameState)
 actOnEffects [] s = return $ return s
-actOnEffects (e:es) s = do mns <- actOnEffect e s
+actOnEffects (e:es) s = do tell $ return $ PlayedCardEffect (index $ s ^. players) e
+                           mns <- actOnEffect e s
                            case mns of Nothing -> return Nothing
                                        Just ns -> actOnEffects es ns
 

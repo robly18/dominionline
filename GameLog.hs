@@ -26,6 +26,7 @@ data Event = PlayerAction Int Action
            | DrawEvent Int Card --the card that has been drawn
            | JoinEvent Int
            | PlayedCardEvent Int Card
+           | PlayedCardEffect Int Effect
     deriving (Generic, Show)
 instance ToJSON Event
 
