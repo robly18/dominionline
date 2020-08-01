@@ -17,10 +17,6 @@ function renderChoice(choice) {
 		case "CFMine": flag = makeMineFlag(); break;
 		default: alert("Unknown choice type! Error choices02"); break;
 	}
-	if (flag != null) {
-		console.log("Hrm");
-		toRender.push({tag:"Custom", makeRender:flag.makeRender});
-	}
 }
 
 function makeRemodelFlag() {
@@ -51,12 +47,23 @@ function makeClearHudChoiceRender() { //awful name tbh
 
 function makeStoreCardChoiceRender() {
 	return function() {
-		//Todo: update store
+		for (let t = 0; t < 16; t++) {
+			storeHolders[t].b.className = "cardChoiceButton";
+			storeHolders[t].b.onclick = function() {
+				toRender.push({tag:"Custom", makeRender:makeClearStoreChoiceRender()});
+				flag = flag.choiceFunction(flag, t);
+			};
+		}
+		return null;
 	}
 }
 function makeClearStoreChoiceRender() { //awful name tbh
 	return function() {
-		//Todo: turn store back to normal
+		for (let t = 0; t < 16; t++) {
+			storeHolders[t].b.className = "cardButton";
+			storeHolders[t].onclick = function(){sendAction(buyCardAction(t));};
+		}
+		return null;
 	}
 }
 

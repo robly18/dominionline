@@ -1,6 +1,7 @@
 
 let currentState = {players : [], store : []};
 let names = /*VERY TEMPORARY*/ ["Copper", "Silver", "Gold", "Estate", "Duchy", "Province", "Forge", "Village", "Lumberjack", "Market", "Remodel", "Cellar", "Workshop", "Moat", "Militia", "Mine"];
+let storeHolders = [];
 
 function setTurn(state, plr) {
 	state.playing = plr;
@@ -46,8 +47,10 @@ function makeStartRender(plr, t) {
 					amt : 10,
 					name : names[t] //!!!
 				}
-				cardHolder.b = makeCardNode(cardHolder.name, function(){sendAction(buyCardAction(t))});
-				document.getElementById("store").appendChild(cardHolder.b);
+				cardHolder.node = makeCardNode(cardHolder.name, function(){sendAction(buyCardAction(t))});
+				document.getElementById("store").appendChild(cardHolder.node);
+				cardHolder.b = cardHolder.node.firstChild;
+				storeHolders.push(cardHolder)
 				return sr3(plr, t+1);
 			} else return null;
 		}
@@ -107,7 +110,7 @@ function updateHudDisplay(state) {
 			hdiv.appendChild(makeCardNode(c, function(){sendAction(playCardAction(i))}));
 			hdiv.appendChild(document.createElement("br"));
 		} else {
-			let clickFunction = function(){toRender.push({tag:"Custom", makeRender:makeClearHudChoiceRender}); flag = flag.choiceFunction(i)};
+			let clickFunction = function(){toRender.push({tag:"Custom", makeRender:makeClearHudChoiceRender}); flag = flag.choiceFunction(flag, i)};
 			hdiv.appendChild(makeCardNode(c, clickFunction, "cardChoiceButton"));
 			hdiv.appendChild(document.createElement("br"));
 		}

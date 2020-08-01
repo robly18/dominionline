@@ -8,6 +8,9 @@ module Game (newGame, act, State, scrambleState, encode, decode, joinGame,
             Action, RL, GameLog,
             module Control.Monad.Writer) where
 
+{-In this module, try to use as many functions from GameInternal as possible-}
+import GameInternal
+
 
 import Data.Maybe
 import Data.Aeson
@@ -25,55 +28,36 @@ import GHC.Generics
 
 import Cards
 import State
-import GameLog
+import Actions
 import PointedList
 import Data.List.PointedList (focus, index, moveTo, fromList)
 import Data.List.PointedList.Circular (next, moveN)
 
 
 
-type RL = RandT StdGen (Writer GameLog)
 
 
 
-actOnEffect :: Effect -> GameState -> RL (Maybe GameState)
-actOnEffect (Money i) s = do tell $ return $ PlayerChangeEvent (index $ s ^. players) $ MoneyDelta i
-                             return $ Just $ over (players . focus . money) (+i) s
-actOnEffect (Actions i) s = do tell $ return $ PlayerChangeEvent (index $ s ^. players) $ ActionDelta i
-                               return $ Just $ over (players . focus . actions) (+i) s
-actOnEffect (Purchases i) s = do tell $ return $ PlayerChangeEvent (index $ s ^. players) $ PurchasesDelta i
-                                 return $ Just $ over (players . focus . purchases) (+i) s
+actOnEffect :: Effect -> GameState -> RL GameState
+actOnEffect (Money i) s = overMoney (+i) s
+actOnEffect (Actions i) s = overActions (+i) s
+actOnEffect (Purchases i) s = overPurchases (+i) s
 actOnEffect (Draw i) s = do let player = s ^. players ^. focus
                             newplayer <- (iterate (>>= draw) (return player)) !! i
-                            return $ return $ set (players. focus) newplayer s
-actOnEffect Action s = if s ^. players ^. focus ^. actions > 0 then do tell $ return $ PlayerChangeEvent (index $ s ^. players) $ ActionDelta (-1)
+                            return $ set (players . focus) newplayer s
+actOnEffect (PlayerChoice c) s = (players . focus) (pushChoice c) s
+actOnEffect (OtherPlayerChoice c) s = (players . traverse) (\p -> if p == s ^. players ^. focus then return p else pushChoice c p) s
+
+--temporary
+actOnEffect Action s = return s
+
+
+{-actOnEffect Action s = if s ^. players ^. focus ^. actions > 0 then do tell $ return $ PlayerChangeEvent (index $ s ^. players) $ ActionDelta (-1)
                                                                        return $ return $ s & (players . focus . actions) %~ (subtract 1)
-                                                                else return Nothing
-actOnEffect (PlayerChoice c) s = return $ return $ over (players . focus . pendingChoices) (++[c]) s
-actOnEffect (OtherPlayerChoice c) s = return $ return $ s & (players . mapped) %~
-                (\p -> if p ^. playerno == index (s ^. players) || any reaction (p ^. hand) then p else p & pendingChoices %~ (++[c]))
+                                                                else return Nothing-}
 
-actOnEffects :: [Effect] -> GameState -> RL (Maybe GameState)
-actOnEffects [] s = return $ return s
-actOnEffects (e:es) s = do tell $ return $ PlayedCardEffect (index $ s ^. players) e
-                           mns <- actOnEffect e s
-                           case mns of Nothing -> return Nothing
-                                       Just ns -> actOnEffects es ns
-
-draw :: Player -> RL Player
-draw p = case p ^. deck of
-            (c:cs) -> (tell $ return $ DrawEvent (p ^. playerno) c) >> return ((over hand (++[c]) . set deck cs) p)
-            [] -> case p ^. discarded of
-                    [] -> return p
-                    _ -> (shuffleDiscarded p) >>= draw
-
-shuffleDiscarded :: Player -> RL Player
-shuffleDiscarded p = do newdeck <- shuffleM (p ^. discarded ++ p ^. deck)
-                        return $ p  & discarded .~ [] & deck .~ newdeck
-
-discardDraw :: Player -> RL Player
-discardDraw p = do let pp = p & hand .~ [] & played .~ [] & discarded .~ p ^. hand ++ p ^. played ++ p ^. discarded
-                   iterate (>>= draw) (return pp) !! 5 --careful. assuming there are at least 5 cards. this might be false later on.
+actOnEffects :: [Effect] -> GameState -> RL GameState
+actOnEffects = flip (foldM (flip actOnEffect))
 
 
 data Response = RPoll State
@@ -90,25 +74,22 @@ act (p, Poll) s = return (s, RPoll $ scrambleState p s)
 
 act (_, PollCard c) s = return (s, RCardData $ cardData c)
 
-act (plr, StartGame) (JoiningState plrs) = (tell $ return $ PlayerAction plr StartGame) >>
-    (liftM ((,RNull) . GameState) $ players (traverse discardDraw) $ GS (moveN plr $ fromJust $ fromList plrs)
-    (map (,10) [Copper, Silver, Gold, Estate, Duchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine]))
+act (plr, StartGame) (JoiningState plrs) = case (startGame plr plrs) of
+                                                Nothing -> return (JoiningState plrs, RNull)
+                                                Just rlgs -> liftM ((,RNull) . GameState) rlgs
 
-act (plr, Say x) s = do tell $ return $ PlayerAction plr (Say x)
-                        return (s, RNull)
-
-act (plr2, action) (GameState s@(GS _ _)) = liftM ((,RNull) . checkGameEnd) $
-        case fmap (view focus) $ moveTo plr2 (s ^. players) of
+act (plr, action) (GameState s@(GS _ _)) = liftM ((,RNull) . checkGameEnd) $
+        case fmap (view focus) $ moveTo plr (s ^. players) of
             Nothing -> return s
             Just p -> case p ^. pendingChoices of
-                        [] ->   if index (s ^. players) /= plr2 then return s else
+                        [] ->   if index (s ^. players) /= plr then return s else
                                 case action of
                                     EndTurn -> endTurn s
                                     Buy i -> buyCard s i
                                     Play i -> playCard s i
                                     _ -> return s
                         _ ->    case action of
-                                    Choose c -> actOnChoice s plr2 c
+                                    Choose c -> actOnChoice s plr c
                                     _ -> return s
 
 act (_, NextGame) (EndState _ _) = return (newGame, RNull)
@@ -119,11 +100,7 @@ checkGameEnd :: GameState -> State
 checkGameEnd s = if (length $ filter ((==0) . snd) (s ^. table)) < 3 then GameState s else
                     EndState s (foldl (\l p -> (p ^. playerno, sum $ map score $ p ^. hand ++ p ^.deck ++ p ^. discarded ++ p ^. played):l) [] (s ^. players))
 
-endTurn :: GameState -> RL GameState --todo dont allow a player with pending choices to end turn
-endTurn s = do  tell $ return $ PlayerAction (index $ s ^. players) EndTurn
-                news <- (players . focus) (discardDraw . set actions 1 . set purchases 1 . set money 0) s
-                let newnews = news & players %~ next
-                return newnews
+
                                        
 extractListElement :: Int -> [a] -> Maybe ([a], a)
 extractListElement 0 (x:xs) = Just (xs, x)
@@ -139,11 +116,10 @@ playCard s i = let player = s ^. players ^. focus
                case extractListElement i itshand of
                         Nothing -> return s
                         Just (newhand, card) -> do let newplayer = player & hand .~ newhand & played .~ card : player ^. played
-                                                   newstate <- actOnCard card (s & (players . focus) .~ newplayer)
-                                                   case newstate of Nothing -> return s
-                                                                    Just ns -> (tell $ return $ PlayedCardEvent (index $ s ^. players) card) >> return ns
+                                                   --todo check that the card can actually be played
+                                                   actOnCard card (s & (players . focus) .~ newplayer)
 
-actOnCard :: Card -> GameState -> RL (Maybe GameState)
+actOnCard :: Card -> GameState -> RL GameState
 actOnCard c = actOnEffects (effects c)
 
 actOnChoice :: GameState -> Int -> Choice -> RL GameState
@@ -193,15 +169,8 @@ buyCard s i = fromMaybe (return s)
                     if amt == 0 then Nothing
                     else if plr ^. purchases == 0 then Nothing
                     else if plr ^. money < cost c then Nothing
-                    else return $ do tell $ return $ PlayerAction (plr ^. playerno) $ Buy i
-                                     tell $ return $ PlayerChangeEvent (plr ^. playerno) $ MoneyDelta (-(cost c))
-                                     tell $ return $ PlayerChangeEvent (plr ^. playerno) $ PurchasesDelta (-1)
-                                     (return $ s & (players . focus) %~ (over money (subtract $ cost c) . over purchases (subtract 1) . over played (c:))
-                                                 & (table . element i . _2) %~ (subtract 1)))
+                    else return $ (return s) >>= (grabStoreCard i)
+                                             >>= (overPurchases (subtract 1))
+                                             >>= (overMoney (subtract $ cost c)))
 
-joinGame :: State -> Writer GameLog (Maybe Int, State)
-joinGame (JoiningState plrs) = do let plrno = length plrs
-                                  tell $ return $ JoinEvent plrno
-                                  return (Just plrno, JoiningState $ plrs ++ [newPlayer plrno])
-joinGame s = return (Nothing, s)
 

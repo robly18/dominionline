@@ -6,11 +6,15 @@ let toRender = [];
 
 function render() {
 	if (renderState == null) {
-		if (toRender.length == 0)
-			return;
-		renderState = makeRenderState(toRender.shift());
+		if (toRender.length != 0) renderState = makeRenderState(toRender.shift());
 	}
-	console.log(renderState);
+	if (renderState == null) {
+		if (flag != null) {
+			if (flag.makeRender != null) toRender.push({tag:"Custom", makeRender:flag.makeRender});
+			flag.makeRender = null;
+		}
+	}
+	if (renderState != null) console.log(renderState);
 	if (renderState != null)
 		renderState = renderState();
 }
