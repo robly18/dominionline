@@ -19,6 +19,7 @@ data Event = DrawEvent Int Card --the card that has been drawn
            | DeckChangeEvent Int DeckChange
            | PushChoiceEvent Int ChoiceFlag
            | EndTurnEvent
+           | StartGameEvent Int
     deriving (Generic, Show)
 instance ToJSON Event
 
@@ -31,6 +32,7 @@ instance ToJSON DataSet
 data DeckChange = DCDraw Card
                 | DCDiscard Int
                 | DCShuffle
+                | DCDiscardPlayed
     deriving (Generic, Show)
 instance ToJSON DeckChange
 

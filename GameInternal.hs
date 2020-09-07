@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module GameInternal (newGame, joinGame, State, encode, decode,
@@ -17,6 +18,7 @@ import Data.List
 import Data.Foldable
 
 import Control.Monad
+import Control.Monad.Loops
 import Control.Monad.Random.Lazy (lift, RandT, StdGen)
 import Control.Monad.Writer
 import System.Random.Shuffle
@@ -33,6 +35,7 @@ import Data.List.PointedList (focus, index, moveTo, fromList)
 import Data.List.PointedList.Circular (next, moveN)
 
 
+
 type RL = RandT StdGen (Writer GameLog)
 
 
@@ -42,15 +45,13 @@ joinGame (JoiningState plrs) = do let plrno = length plrs
                                   return (Just plrno, JoiningState $ plrs ++ [newPlayer plrno])
 joinGame s = return (Nothing, s)
 
-startGame :: Int -> [Player] -> Maybe (RL GameState)
-startGame = undefined
-{-startGame p s = do 
+startingTable :: [(Card, Int)] --Temporary!!
+startingTable = map (,10) [Copper, Silver, Gold, Estate, Duchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine]
 
-     do tell $ return $ PlayerAction plr StartGame
-        let gs = GS (moveN plr $ fromJust $ fromList plrs)
-        (liftM ((,RNull) . GameState) $ players (traverse discardDraw) $ 
-        (map (,10) [Copper, Silver, Gold, Estate, Duchy, Province, Forge, Village, Lumberjack, Market, Remodel, Cellar, Workshop, Moat, Militia, Mine]))
--}
+startGame :: Int -> [Player] -> Maybe (RL GameState)
+startGame p plrs = do pointedplrs <- (fromList plrs) >>= moveTo p
+                      return $ do tell $ return $ StartGameEvent p
+                                  return $ GS pointedplrs startingTable
 
 --All of the following primitives apply to the focused player, as they are the only one who has money and stuff
 overMoney :: (Int -> Int) -> GameState -> RL GameState
@@ -84,9 +85,21 @@ draw p = case p ^. deck of
 drawN :: Int -> Player -> RL Player
 drawN n = (!! n) . (iterate (>>= draw)) . return
 
-discard :: Player -> RL Player
-discard = undefined
+discard :: Int -> Player -> RL Player
+discard i p = case p ^. hand ^? ix i of
+                Nothing -> return p --maybe make an error message eventually?
+                Just discarded -> do tell $ return $ DeckChangeEvent (p ^. playerno) (DCDiscard i)
+                                     let (start, end) = splitAt i (p ^. hand)
+                                     return $
+                                       set hand (start ++ tail end) $
+                                       over played (discarded:) p
 
+discardAll :: Player -> RL Player --not to be confused with applying discard many times: this sends the discarded cards to "discard" instead of played!
+discardAll p = do iterateUntilM (null . view hand) (discard 1) p
+                  tell $ return $ DeckChangeEvent (p ^. playerno) DCDiscardPlayed
+                  return $
+                    over discarded (p ^. played ++) $
+                    set played [] p
 
 pushChoice :: ChoiceFlag -> Player -> RL Player
 pushChoice cf p = do tell $ return $ PushChoiceEvent (p ^. playerno) cf
@@ -94,7 +107,7 @@ pushChoice cf p = do tell $ return $ PushChoiceEvent (p ^. playerno) cf
 
 endTurn :: GameState -> RL GameState --todo dont allow a player to end turn if there are pending choices
 endTurn s = do  tell $ return $ EndTurnEvent
-                news <- (players . focus) (drawN 5 >=> discard . set actions 1 . set purchases 1 . set money 0) s
+                news <- (players . focus) (drawN 5 >=> discardAll . set actions 1 . set purchases 1 . set money 0) s
                 let newnews = over players next news
                 return newnews
 

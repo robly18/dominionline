@@ -28,9 +28,6 @@ function makeRenderState(event) {
 		case "Say":
 			return null;
 			break;
-		case "StartGame":
-			return makeStartRender(event.contents[0], 0);
-			break;
 		case "Buy":
 			return makeBuyCardRender(event.contents[0], event.contents[1].contents, 0);
 			break;
@@ -38,6 +35,9 @@ function makeRenderState(event) {
 			return makeEndTurnEvent(event.contents[0], 0);
 			break;
 		}
+		break;
+	case "StartGameEvent":
+		return makeStartRender(event.contents, 0);
 		break;
 	case "PlayerChangeEvent":
 		return makeChangeRender(event.contents[0], event.contents[1]);
